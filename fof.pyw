@@ -19,12 +19,14 @@ try:
     proposalWaitTime = config.getint(config.sections()[0], "proposalwaittime") * 1000 * 60
     quickInfoWaitTime = config.getint(config.sections()[0], "quickinfowaittime") * 1000
     defaultCompletionExpiration = config.getint(config.sections()[0], "defaultcompletionexpiration")
+    historyGraphLength = config.getint(config.sections()[0], "historygraphlength")
 except:
     print "Could not load config file. Reverting to default values."
     pastshown = 1
     proposalWaitTime = 60 * 60 * 1000
     quickInfoWaitTime = 5 * 1000
     defaultCompletionExpiration = 12
+    historyGraphLength = 10
 duration = [1, 7, 30, 90, 365, float("inf")]
 suggestionSkips = -1
 clockStrings = {}
@@ -152,7 +154,8 @@ def showHistory(tid):
         end = time.time()
         period = 0
         history = []        
-        while end >= time.time() - getRealDuration(duration[pastshown+1]) * 24 * 60 * 60:
+        #while end >= time.time() - getRealDuration(duration[pastshown+1]) * 24 * 60 * 60:
+        for _ in range(historyGraphLength):
             end = time.time() - period * duration[pastshown] * 24 * 60 * 60
             start = time.time() -  (period+1) * duration[pastshown] * 24 * 60 * 60
             cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value = 1 AND endTime >= ? AND endTime <= ?", [tid, start, end])
@@ -319,11 +322,13 @@ def reloadMain():
     lastFightTotal1 = cur.fetchall()[0][0]
     if lastFightTotal1 > lastFightTotal2:
         arrow = u'\u279a'
+    elif lastFightTotal1 == lastFightTotal2:
+        arrow = u'\u2192'
     else:
         arrow = u'\u2798'    
-    sumFightText = getTaskName(lastTaskID)+"\n" + (str(lastFightTotal2)+arrow if firstTime<startingDate2 else "") + str(lastFightTotal1)
+    sumFightText = getTaskName(lastTaskID)+"\n" + (str(lastFightTotal2)+arrow if firstTime<startingDate else "") + str(lastFightTotal1)
     sumFightLabel = Label(root, text=sumFightText)
-    if firstTime<startingDate2: 
+    if firstTime<startingDate: 
         sumFightLabel.bind('<Double-Button-1>', showHistory(lastTaskID))
     sumFightLabel.bind('<Double-Button-3>', completeTask(lastTaskID))
     sumFightLabel.bind('<Triple-Button-3>', completeTask(lastTaskID, True))
