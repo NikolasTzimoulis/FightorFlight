@@ -1,0 +1,10 @@
+.project
+.pydevproject
+*.png
+*.wav
+*.db
+analytics.txt
+fof.pyc
+gp_play.asv
+log.txt
+squared_exponential.asv
