@@ -16,8 +16,16 @@ with con:
     #print datetime.datetime.fromtimestamp(lastTask[0]).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(lastTask[1]).strftime('%Y-%m-%d, %H:%M'), lastTask[2:]
     #cur.execute("DELETE FROM Fights WHERE startTime = ? AND endTime = ? AND value = ? AND taskID = ?", lastTask)
     
-    cur.execute("SELECT * FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name = 'lala')")
+    #cur.execute("SELECT DISTINCT taskID FROM Fights")
+    #for i in [x[0] for x in cur.fetchall()]:
+    #    cur.execute("SELECT name FROM Tasks WHERE id = ?", [i])
+    #    print i, cur.fetchall()[0][0]
+
+    
+    cur.execute("SELECT * FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name LIKE 'lala%')")
     print cur.fetchall()
-    cur.execute("DELETE FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name = 'lala')")
-    cur.execute("DELETE FROM Tasks WHERE name = 'lala'")
+    cur.execute("DELETE FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name LIKE 'lala%')")
+    cur.execute("DELETE FROM Tasks WHERE name LIKE 'lala%'")
+    
+
     
