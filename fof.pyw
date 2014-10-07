@@ -1,3 +1,5 @@
+import matplotlib.pyplot
+matplotlib.use('TkAgg')
 from Tkinter import *
 import ttk
 import sqlite3 as lite
@@ -6,7 +8,6 @@ import ConfigParser
 import os
 import winsound
 import datetime
-import matplotlib.pyplot
 
 taskDB = "fof.db"
 soundPlaylist = "sounds.m3u"
@@ -14,17 +15,17 @@ configFileName = "config.ini"
 config = ConfigParser.ConfigParser()
 try:
     config.read(configFileName)
-    pastshown = config.getint(config.sections()[0], "pastshown")
+    pastshown = config.getint(config.sections()[0], "pastshown") * 24 * 60 * 60
     proposalWaitTime = config.getint(config.sections()[0], "proposalwaittime") * 1000 * 60
     quickInfoWaitTime = config.getint(config.sections()[0], "quickinfowaittime") * 1000
-    defaultCompletionExpiration = config.getint(config.sections()[0], "defaultcompletionexpiration")
+    defaultCompletionExpiration = config.getint(config.sections()[0], "defaultcompletionexpiration") * 60 * 60
     historyGraphLength = config.getint(config.sections()[0], "historygraphlength")
 except:
     print "Could not load config file. Reverting to default values."
-    pastshown = 30
+    pastshown = 30 * 24 * 60 * 60
     proposalWaitTime = 60 * 60 * 1000
     quickInfoWaitTime = 5 * 1000
-    defaultCompletionExpiration = 12
+    defaultCompletionExpiration = 12 * 60 * 60
     historyGraphLength = 10
 suggestionSkips = -1
 clockStrings = {}
@@ -33,12 +34,12 @@ lastReloadTime = 0
 lastSuggestion = None
 quickInfoReset = None
 nextMainReload = None
-nextComplete = 0
 
 def addNewTask(_):
     global pastshown
     line = entryText.get()
-    if len(line) > 0 and line.split()[0].isalpha() and line.split()[-1].isdigit():
+    duration = getSeconds(line.split()[-1])
+    if len(line) > 0 and line.split()[0].isalpha() and duration is not None:
         cur.execute("SELECT id FROM Tasks WHERE name = ?", [ " ".join(line.split()[:-1]) ])
         rows = cur.fetchall()
         if len(rows) > 0:
@@ -49,57 +50,48 @@ def addNewTask(_):
             cur.execute("SELECT id FROM Tasks WHERE name = ?", [ " ".join(line.split()[:-1]) ])
             tid = cur.fetchall()[0][0]
         cur.execute("UPDATE Fights SET value=-1 WHERE taskId=? AND value = 0 AND startTime <= ?;", [tid, time.time()])
-        cur.execute("UPDATE Tasks SET complete = ? WHERE complete > ? AND id=?", [time.time(), time.time(), tid])
-        cur.execute("INSERT INTO Fights VALUES(?, ?, ?, ?)", [time.time(), time.time()+int(line.split()[-1])*60, 0, tid])
+        unComplete(tid)
+        cur.execute("INSERT INTO Fights VALUES(?, ?, ?, ?)", [time.time(), time.time()+duration, 0, tid])
         con.commit() 
         entryText.set("")
         root.after(1, reloadMain)
-    elif len(line) > 0 and len(line.split()) == 1 and line.split()[0].isdigit():
-        pastshown = int(line)
-        config.set(config.sections()[0], "pastshown", pastshown)
+    elif len(line) > 0 and len(line.split()) == 1 and duration is not None:
+        pastshown = duration
+        config.set(config.sections()[0], "pastshown", int(pastshown / 24 / 60 / 60))
         entryText.set("")   
         root.after(1, reloadMain)
 
-def resolveFight(task_id, timeStart, timeEnd, value):
+def resolveFight(task_id, timeStart, timeEnd, success):
     def resolveFight_inner(_=None):
-        global nextComplete
-        cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [value, task_id, timeStart, timeEnd])
-        con.commit()
-        if value == 1:
-            completeTask(task_id)
-        elif value == -1:
+        if success:
+            completionTime = getCompletionTime()
+            cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, timeEnd])
+            if completionTime == float('inf'):
+                playAudio(soundFiles[5]) 
+            elif completionTime > defaultCompletionExpiration:
+                playAudio(soundFiles[4])
+            else:
+                playAudio(soundFiles[3])   
+        elif not success:
+            cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])
             rescheduleFight(task_id, timeStart, timeEnd)(None)     
             playAudio(soundFiles[2])
-        nextComplete = 0
-        root.after(1, reloadMain)   
+        con.commit()
+        root.after(1, reloadMain)
     return resolveFight_inner     
 
-def prepareCompletion():
-    def prepareCompletion_inner(_):
-        global nextComplete
-        if nextComplete == 0:
-            try:
-                nextComplete = float(entryText.get()) * 60 * 60
-                entryText.set("")
-            except:
-                nextComplete = defaultCompletionExpiration * 60 * 60
-        else:
-            nextComplete = 0
-        root.after(1, reloadMain)
-    return prepareCompletion_inner
-    
-
-def completeTask(tid):
-    if nextComplete > 0:
-        if nextComplete == float('inf'):
-            playAudio(soundFiles[5]) 
-        else:
-            playAudio(soundFiles[4])
-        cur.execute("UPDATE Tasks SET complete=? WHERE id=?", [time.time()+nextComplete, tid])
-        con.commit()
-    else:
-        playAudio(soundFiles[3])   
-
+def getCompletionTime(peek=False):
+    global quickInfoReset
+    completionTime = getSeconds(entryText.get())
+    if completionTime is not None and not peek: 
+        entryText.set("")
+    elif completionTime is None:
+        completionTime = defaultCompletionExpiration
+    if not peek:
+        quickInfoText.set(getDateString(time.time()+completionTime))
+        if quickInfoReset is not None: root.after_cancel(quickInfoReset)
+        quickInfoReset = root.after(quickInfoWaitTime, lambda: quickInfoText.set(''))
+    return completionTime
 
 def periodicProposal():
     global suggestionSkips, proposalWaitTime, activeTasks
@@ -122,7 +114,7 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
     while not found and days <= maxDays:
         days += 1
         pastDate = time.time() - days * 24 * 60 * 60
-        cur.execute("SELECT taskId, startTime, endTime FROM Fights WHERE value = 1 AND startTime < ? AND endTime > ? ORDER BY startTime ASC", [pastDate+window, pastDate-window])
+        cur.execute("SELECT taskId, startTime, endTime FROM Fights WHERE value > 0 AND startTime < ? AND endTime > ? ORDER BY startTime ASC", [pastDate+window, pastDate-window])
         rows = cur.fetchall()
         for fight in rows:
             if fight[0] in activeTasks or isComplete(fight[0]):
@@ -133,7 +125,7 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
             else:
                 found = True
                 rescheduleFight(fight[0], fight[1], fight[2])(None)
-                if days <= beepThreshold:
+                if days * 24 * 60 * 60 <= beepThreshold:
                     playAudio(soundFiles[0])
                 break
     if days > maxDays:
@@ -141,7 +133,7 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
     
 def rescheduleFight(tid, timestamp, deadline, reload=False):
     def rescheduleFight_inner(_):
-        global lastSuggestion, quickInfoWait, quickInfoReset
+        global lastSuggestion, quickInfoReset
         entryText.set(generateTaskText(tid, timestamp,deadline))
         lastSuggestion = (tid, timestamp, deadline)
         quickInfoText.set(getDateString(deadline))
@@ -150,77 +142,139 @@ def rescheduleFight(tid, timestamp, deadline, reload=False):
         if reload: root.after(1, reloadMain)    
     return rescheduleFight_inner
 
-def generateTaskText(tid, timestamp, deadline):
-    return getTaskName(tid)+" "+str(int(round((deadline-timestamp)/60)))
-
-def getDateString(deadline):
-    try:
-        return datetime.datetime.fromtimestamp(deadline).strftime('%Y-%m-%d, %H:%M')
-    except:
-        return u'\u221e'
-
-def getTaskName(tid):
-    cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
-    return cur.fetchall()[0][0]
-
-def showHistory(tid):
+def showHistory(tid, plusone=False):
     def showHistory_inner(_):
         end = time.time()
         period = 0
         history = []        
-        #while end >= time.time() - getRealDuration(duration[pastshown+1]) * 24 * 60 * 60:
+        improved = None
         for _ in range(historyGraphLength):
-            end = time.time() - period * pastshown * 24 * 60 * 60
-            start = time.time() -  (period+1) * pastshown * 24 * 60 * 60
-            cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value = 1 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-            history.append(cur.fetchall()[0][0])
+            end = time.time() - period * pastshown 
+            start = time.time() -  (period+1) * pastshown 
+            if plusone and improved is None: improved = getScore(tid, start, end, True)
+            history.append( getScore(tid, start, end) )            
             period += 1
         matplotlib.pyplot.clf()
+        if plusone:
+            matplotlib.pyplot.plot(history[::-1], 'ko-')
+            history[0] = improved
         matplotlib.pyplot.plot(history[::-1], 'ro-')
         matplotlib.pyplot.show()
     return showHistory_inner
 
 def showTasks():
     def showTasks_inner(_):
-        startingDate = time.time() -  pastshown * 24 * 60 * 60
-        cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value = 1 AND endTime >= ?", [startingDate])
+        startingDate2 = time.time() -  2 * pastshown
+        cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate2])
         tasks = [x[0] for x in cur.fetchall()]
-        taskCounts = {}
-        for tid in tasks:
-            cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value = 1 AND endTime >= ?", [tid, startingDate])
-            taskCounts[tid] = cur.fetchall()[0][0]
         if len(tasks) > 0:
             top = Toplevel()
-            for tid in sorted(tasks, key=lambda x:taskCounts[x]*(1-isComplete(x)), reverse=True):
+            for tid in sorted(tasks, key=lambda x:getCompletionExpirationDate(x)):
                 completed = isComplete(tid)
                 taskFrame= Frame(top)
                 taskLabel = Label(taskFrame, text=getTaskName(tid), fg='dark red' if completed else 'black')
-                countLabel = Label(taskFrame, text=('x'+str(taskCounts[tid])), fg='dark red' if completed else 'black')
+                countLabel = Label(taskFrame, text=getArrowString(tid), fg='dark red' if completed else 'black')
                 dateLabel = Label(taskFrame, text = getDateString(getCompletionExpirationDate(tid)) if completed else '', fg='dark red')               
-                cur.execute("SELECT startTime, endTime FROM Fights WHERE taskID = ? AND value = 1 ORDER BY endTime DESC LIMIT 1", [tid])                       
+                cur.execute("SELECT startTime, endTime FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])                       
                 lastFight = cur.fetchall()[0]
                 taskLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
+                #taskLabel.bind('<Button-3>', showHistory(tid))
                 countLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
                 dateLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
-                taskLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
-                countLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
-                dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
+                taskLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], False))
+                countLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], False))
+                dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], False))
                 taskLabel.pack(side=LEFT)
                 countLabel.pack(side=LEFT)
                 dateLabel.pack(side=LEFT)
                 taskFrame.pack()   
     return showTasks_inner
 
+def getTaskName(tid):
+    cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
+    return cur.fetchall()[0][0]
+
 def isComplete(tid):
-    cur.execute("SELECT complete FROM Tasks WHERE id=?", [tid])
-    if cur.fetchall()[0][0] > time.time():
+    if getCompletionExpirationDate(tid) > time.time():
         return True
     else:
         return False
     
 def getCompletionExpirationDate(tid):
-    cur.execute("SELECT complete FROM Tasks WHERE id=?", [tid])
-    return cur.fetchall()[0][0]
+    cur.execute("SELECT value, endTime FROM Fights WHERE taskId = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])
+    try:
+        result = cur.fetchall()[0]
+        return result[0]+result[1]
+    except:
+        return time.time() 
+
+def unComplete(tid):
+    if isComplete(tid):
+        cur.execute("SELECT endTime FROM Fights WHERE taskId = ? ORDER BY endTime DESC LIMIT 1", [tid])        
+        deadline = cur.fetchall()[0][0]
+        cur.execute("UPDATE Fights SET value = ? WHERE taskId = ? AND endTime =  ?", [time.time() - deadline, tid, deadline])
+        
+def getScore(tid, start, end, plusone = False):    
+    score = 0
+    if not plusone:
+        cur.execute("SELECT SUM(value) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    else:
+        cur.execute("SELECT SUM(value) FROM Fights WHERE taskID = ? AND value >= 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    partialScore = cur.fetchall()[0][0]
+    score += partialScore if partialScore is not None else 0
+    cur.execute("SELECT SUM(endTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    partialScore = cur.fetchall()[0][0]
+    score += partialScore if partialScore is not None else 0
+    cur.execute("SELECT SUM(startTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    partialScore = cur.fetchall()[0][0]
+    score -= partialScore if partialScore is not None else 0
+    if plusone: score += getCompletionTime(True)
+    return min(1.0, score/(end-start))
+    
+def getArrowString(tid, plusone = False):
+    startingDate = time.time() -  pastshown 
+    startingDate2 = time.time() -  2 * pastshown 
+    cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, startingDate2, startingDate])
+    lastFightTotal2 = getScore(tid, startingDate2, startingDate)
+    cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, startingDate, time.time()])
+    lastFightTotal1 = getScore(tid, startingDate, time.time(), True)
+    if lastFightTotal1 > lastFightTotal2:
+        arrow = u'\u279a'
+    elif lastFightTotal1 == lastFightTotal2:
+        arrow = u'\u2192'
+    else:
+        arrow = u'\u2798'    
+    return str(round(lastFightTotal2,2)) + arrow + str(round(lastFightTotal1,2)) + ('?' if plusone else '')
+
+def getSeconds(text):
+    timeList = text.split(':')
+    seconds = None
+    try: seconds = float(timeList[-1]) * 60 
+    except: return None
+    if len(timeList) > 1:
+        try: seconds += float(timeList[-2]) * 60 *60
+        except: return None
+    if len(timeList) > 2:
+        try: seconds += float(timeList[-3]) * 24 * 60 *60
+        except: return None
+    return seconds
+        
+def generateTaskText(tid, timestamp, deadline):
+    #return getTaskName(tid)+" "+str(int(round((deadline-timestamp)/60)))
+    seconds = deadline - timestamp
+    days, remainder = divmod(seconds, 24*60*60)
+    hours, remainder = divmod(remainder, 60*60)
+    minutes, seconds = divmod(remainder, 60)
+    timeString = str(int(days))+':' if days > 0 else ''
+    timeString += ('0' if days > 0 and hours < 10 else '') + str(int(hours))+':' if days > 0 or hours > 0 else ''
+    timeString += ('0' if hours > 0 and minutes < 10 else '') + str(int(minutes))
+    return getTaskName(tid)+" "+  timeString
+
+def getDateString(deadline):
+    try:
+        return datetime.datetime.fromtimestamp(deadline).strftime('%Y-%m-%d, %H:%M')
+    except:
+        return u'\u221e'
           
 def playAudio(filename):
     if filename.endswith('wav'):
@@ -233,8 +287,6 @@ def reloadMain():
     for child in root.winfo_children():
         child.destroy()
         
-    startingDate = time.time() -  pastshown * 24 * 60 * 60
-    startingDate2 = time.time() -  2 * pastshown * 24 * 60 * 60
     global taskPos, activeTasks, nextMainReload
     taskPos = 0    
          
@@ -263,31 +315,17 @@ def reloadMain():
         else:
             if timeLeft > -1: playAudio(soundFiles[1])
             waitingForResolution = True
-            taskLabel = Label(taskFrame, text=getTaskName(tid), fg='dark red' if nextComplete > 0 else 'black')
+            taskLabel = Label(taskFrame, text=getTaskName(tid), fg='black')
             taskLabel.pack(side=LEFT)
-            cur.execute("SELECT taskID FROM Fights WHERE value <> -1 ORDER BY endTime DESC LIMIT 1")
-            cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value = 1 AND endTime >= ? AND endTime <= ?", [tid, startingDate2, startingDate])
-            lastFightTotal2 = cur.fetchall()[0][0]
-            cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value = 1 AND endTime >= ? AND endTime <= ?", [tid, startingDate, time.time()])
-            lastFightTotal1 = cur.fetchall()[0][0]
-            if lastFightTotal1 > lastFightTotal2:
-                arrow = u'\u279a'
-            elif lastFightTotal1 == lastFightTotal2:
-                arrow = u'\u2192'
-            else:
-                arrow = u'\u2798'    
-            sumFightText = str(lastFightTotal2) + arrow + str(lastFightTotal1)
-            sumFightLabel = Label(taskFrame, text=sumFightText, fg='dark red' if nextComplete > 0 else 'black')
-            taskLabel.bind('<Button-1>', showHistory(tid))
-            taskLabel.bind('<Button-3>', prepareCompletion())
-            sumFightLabel.bind('<Button-1>', showHistory(tid))
-            sumFightLabel.bind('<Button-3>', prepareCompletion())
-            sumFightLabel.pack(side=RIGHT)
+            sumFightLabel = Label(taskFrame, text=getArrowString(tid, plusone=True), fg='black')
+            taskLabel.bind('<Button-1>', showHistory(tid, True))
+            sumFightLabel.bind('<Button-1>', showHistory(tid, True))
+            sumFightLabel.pack(side=LEFT)
             flightButton = Button(taskFrame, text=u"\u2717", fg="white", bg="gray60")
-            flightButton.configure(command=resolveFight(tid, timestamp, deadline, -1))
+            flightButton.configure(command=resolveFight(tid, timestamp, deadline, False))
             flightButton.pack(side=RIGHT)
             fightButton = Button(taskFrame, text=u"\u2714", fg="white", bg="red")
-            fightButton.configure(command=resolveFight(tid, timestamp, deadline, 1))
+            fightButton.configure(command=resolveFight(tid, timestamp, deadline, True))
             fightButton.pack(side=RIGHT)
             
         taskFrame.pack()   
@@ -322,7 +360,7 @@ con = lite.connect(taskDB)
 with con:    
     cur = con.cursor()
     try:
-        cur.execute("CREATE TABLE Tasks(id INTEGER PRIMARY KEY, name TEXT UNIQUE, complete INTEGER);")
+        cur.execute("CREATE TABLE Tasks(id INTEGER PRIMARY KEY, name TEXT UNIQUE);")
         cur.execute("CREATE TABLE Fights(startTime INTEGER, endTime INTEGER, value INTEGER, taskId INTEGER, FOREIGN KEY(taskId) REFERENCES Tasks(id));")
         print 'Created new database.'
     except:
@@ -331,8 +369,7 @@ with con:
         cur.execute("SELECT MIN(endTime) FROM Fights")
         maxDays = int((time.time()-cur.fetchall()[0][0])/60/60/24)
     except:
-        maxDays = pastshown
-
+        maxDays = pastshown / 24 / 60 / 60
 
 root = Tk()
 entryText = StringVar()
