@@ -231,7 +231,6 @@ def getScore(tid, start, end, plusone = False):
     try: actualEnd = max ( end,  max([x[1]+x[2] for x in rows]) )
     except: actualEnd = end 
     
-    if plusone: score += getCompletionTime(True)
     if score == (actualEnd-actualStart): return 1.0
     return score/(actualEnd-actualStart)
     
