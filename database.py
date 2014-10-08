@@ -23,26 +23,29 @@ def fixExpirationDates():
     cur.execute("SELECT * FROM Tasks")
     for tid, tname in cur.fetchall():
         print tid, tname
-        delay=int(raw_input())
         cur.execute("SELECT startTime, endTime, value FROM Fights WHERE value > 0 AND taskId = ? ORDER BY endTime DESC", [tid])
         nextStartTime = float('inf')
         for startTime, endTime, value in cur.fetchall():
-            if value == 20 * 60 * 60 and endTime + value < nextStartTime:
-                newVal = min(delay*60*60, nextStartTime-endTime)
+            if endTime + value > nextStartTime:
+                print endTime, '+', value, '>', nextStartTime
+                newVal = nextStartTime-endTime
                 cur.execute("UPDATE Fights SET value = ? WHERE startTime = ? AND endTime = ? AND taskId = ?", [newVal, startTime, endTime, tid])            
             nextStartTime = startTime
             
 def deleteLala():
-    cur.execute("SELECT * FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name LIKE 'lala%')")
-    print cur.fetchall()
     cur.execute("DELETE FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name LIKE 'lala%')")
     cur.execute("DELETE FROM Tasks WHERE name LIKE 'lala%'")
+    
+def printlala():
+    cur.execute("SELECT * FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name LIKE 'lala%')")
+    for startTime, endTime, value, tid in cur.fetchall():
+        print datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
 
 with con:    
     cur = con.cursor()
     deleteLala()
     
-    
+
    
    
     

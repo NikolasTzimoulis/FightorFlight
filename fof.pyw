@@ -215,29 +215,33 @@ def unComplete(tid):
         cur.execute("UPDATE Fights SET value = ? WHERE taskId = ? AND endTime =  ?", [time.time() - deadline, tid, deadline])
         
 def getScore(tid, start, end, plusone = False):    
-    score = 0
+
+    # add task completion time generated during this time period 
+    cur.execute("SELECT SUM(value) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    partialScore = cur.fetchall()
+    score += partialScore[0][0] if (len(partialScore) > 0 and partialScore[0][0] is not None) else 0
+    # add task running time generated during this time period
     if not plusone:
-        cur.execute("SELECT SUM(value) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+        cur.execute("SELECT SUM(endTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
     else:
-        cur.execute("SELECT SUM(value) FROM Fights WHERE taskID = ? AND value >= 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-    partialScore = cur.fetchall()[0][0]
-    score += partialScore if partialScore is not None else 0
-    cur.execute("SELECT SUM(endTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-    partialScore = cur.fetchall()[0][0]
-    score += partialScore if partialScore is not None else 0
-    cur.execute("SELECT SUM(startTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-    partialScore = cur.fetchall()[0][0]
-    score -= partialScore if partialScore is not None else 0
+        cur.execute("SELECT SUM(endTime) FROM Fights WHERE taskID = ? AND value >= 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    partialScore = cur.fetchall()
+    score += partialScore[0][0] if (len(partialScore) > 0 and partialScore[0][0] is not None) else 0
+    if not plusone:
+        cur.execute("SELECT SUM(startTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    else:
+        cur.execute("SELECT SUM(startTime) FROM Fights WHERE taskID = ? AND value >= 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+    partialScore = cur.fetchall()
+    score -= partialScore[0][0] if (len(partialScore) > 0 and partialScore[0][0] is not None) else 0
+    # add expected completion time for the pledge that is still undecided
     if plusone: score += getCompletionTime(True)
     return min(1.0, score/(end-start))
     
 def getArrowString(tid, plusone = False):
     startingDate = time.time() -  pastshown 
     startingDate2 = time.time() -  2 * pastshown 
-    cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, startingDate2, startingDate])
     lastFightTotal2 = getScore(tid, startingDate2, startingDate)
-    cur.execute("SELECT COUNT(*) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, startingDate, time.time()])
-    lastFightTotal1 = getScore(tid, startingDate, time.time(), True)
+    lastFightTotal1 = getScore(tid, startingDate, time.time(), plusone)
     if lastFightTotal1 > lastFightTotal2:
         arrow = u'\u279a'
     elif lastFightTotal1 == lastFightTotal2:
