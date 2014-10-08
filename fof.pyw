@@ -214,28 +214,26 @@ def unComplete(tid):
         deadline = cur.fetchall()[0][0]
         cur.execute("UPDATE Fights SET value = ? WHERE taskId = ? AND endTime =  ?", [time.time() - deadline, tid, deadline])
         
-def getScore(tid, start, end, plusone = False):    
-
-    # add task completion time generated during this time period 
-    cur.execute("SELECT SUM(value) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-    partialScore = cur.fetchall()
-    score += partialScore[0][0] if (len(partialScore) > 0 and partialScore[0][0] is not None) else 0
-    # add task running time generated during this time period
+def getScore(tid, start, end, plusone = False):   
     if not plusone:
-        cur.execute("SELECT SUM(endTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
+        cur.execute("SELECT startTime, endTime, value FROM Fights WHERE taskID = ? AND value > 0 AND endTime+value >= ? AND startTime <= ?", [tid, start, end])
     else:
-        cur.execute("SELECT SUM(endTime) FROM Fights WHERE taskID = ? AND value >= 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-    partialScore = cur.fetchall()
-    score += partialScore[0][0] if (len(partialScore) > 0 and partialScore[0][0] is not None) else 0
-    if not plusone:
-        cur.execute("SELECT SUM(startTime) FROM Fights WHERE taskID = ? AND value > 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-    else:
-        cur.execute("SELECT SUM(startTime) FROM Fights WHERE taskID = ? AND value >= 0 AND endTime >= ? AND endTime <= ?", [tid, start, end])
-    partialScore = cur.fetchall()
-    score -= partialScore[0][0] if (len(partialScore) > 0 and partialScore[0][0] is not None) else 0
-    # add expected completion time for the pledge that is still undecided
+        cur.execute("SELECT startTime, endTime, value FROM Fights WHERE taskID = ? AND value >= 0 AND endTime+value >= ? AND startTime <= ?", [tid, start, end])
+    rows = cur.fetchall()
+    
+    if plusone: # add expected completion time for the pledge that is still undecided
+        rows = map(lambda x: [x[0], x[1], getCompletionTime(True) if x[2]==0 else x[2]], rows)
+    # sum running duration and completion time for tasks in this time period
+    score = sum([x[1]-x[0]+x[2] for x in rows])
+    # stretch time period duration so that edge tasks don't inflate the score
+    try: actualStart = min ( start ,  min([x[0] for x in rows]) )
+    except: actualStart = start
+    try: actualEnd = max ( end,  max([x[1]+x[2] for x in rows]) )
+    except: actualEnd = end 
+    
     if plusone: score += getCompletionTime(True)
-    return min(1.0, score/(end-start))
+    if score == (actualEnd-actualStart): return 1.0
+    return score/(actualEnd-actualStart)
     
 def getArrowString(tid, plusone = False):
     startingDate = time.time() -  pastshown 

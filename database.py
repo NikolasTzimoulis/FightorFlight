@@ -43,6 +43,7 @@ def printlala():
 
 with con:    
     cur = con.cursor()
+    printlala()
     deleteLala()
     
 
