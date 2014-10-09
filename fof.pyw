@@ -64,6 +64,7 @@ def addNewTask(_):
 
 def resolveFight(task_id, timeStart, timeEnd, success):
     def resolveFight_inner(_=None):
+        global waitingForResolution
         if success:
             completionTime = getCompletionTime()
             cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, timeEnd])
@@ -78,6 +79,7 @@ def resolveFight(task_id, timeStart, timeEnd, success):
             rescheduleFight(task_id, timeStart, timeEnd)(None)     
             playAudio(soundFiles[2])
         con.commit()
+        waitingForResolution = False
         root.after(1, reloadMain)
     return resolveFight_inner     
 
