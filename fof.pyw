@@ -296,7 +296,7 @@ def reloadMain():
          
     cur.execute("SELECT taskId, startTime, endTime FROM Fights WHERE value = 0")
     rows = cur.fetchall()
-    undecidedTasks = rows
+    undecidedTasks = map(lambda x: x[0], rows)
     rows.sort(key = lambda x: x[2], reverse = False)
     timeLeftList = []
     for tid, timestamp, deadline in rows:
