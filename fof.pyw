@@ -29,8 +29,9 @@ except:
     historyGraphLength = 10
 suggestionSkips = -1
 clockStrings = {}
-activeTasks = []
+undecidedTasks = []
 lastReloadTime = 0
+waitingForResolution = False
 lastSuggestion = None
 quickInfoReset = None
 nextMainReload = None
@@ -94,17 +95,15 @@ def getCompletionTime(peek=False):
     return completionTime
 
 def periodicProposal():
-    global suggestionSkips, proposalWaitTime, activeTasks
+    global suggestionSkips, proposalWaitTime
     suggestionSkips = -1
-    if len(activeTasks) == 0:
-        proposeTask(beepThreshold = pastshown)
-    else:
-        proposeTask()
+    proposeTask(beepThreshold = pastshown)
     root.after(proposalWaitTime, periodicProposal)
 
              
 def proposeTask(skipChange = 0, beepThreshold = 0):
-    global suggestionSkips, activeTasks
+    global suggestionSkips, undecidedTasks
+    if waitingForResolution: return
     suggestionSkips += skipChange
     if suggestionSkips < 0: suggestionSkips = 0
     found = False
@@ -117,7 +116,7 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
         cur.execute("SELECT taskId, startTime, endTime FROM Fights WHERE value > 0 AND startTime < ? AND endTime > ? ORDER BY startTime ASC", [pastDate+window, pastDate-window])
         rows = cur.fetchall()
         for fight in rows:
-            if fight[0] in activeTasks or isComplete(fight[0]):
+            if fight[0] in undecidedTasks or isComplete(fight[0]):
                 continue
             elif skipsLeft > 0:
                 skipsLeft -= 1
@@ -133,9 +132,8 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
     
 def rescheduleFight(tid, timestamp, deadline, reload=False):
     def rescheduleFight_inner(_):
-        global lastSuggestion, quickInfoReset
-        entryText.set(generateTaskText(tid, timestamp,deadline))
-        lastSuggestion = (tid, timestamp, deadline)
+        global quickInfoReset
+        entryText.set(generateEntryText(tid, timestamp,deadline))
         quickInfoText.set(getDateString(deadline))
         if quickInfoReset is not None: root.after_cancel(quickInfoReset)
         quickInfoReset = root.after(quickInfoWaitTime, lambda: quickInfoText.set(''))    
@@ -164,6 +162,7 @@ def showHistory(tid, plusone=False):
 
 def showTasks():
     def showTasks_inner(_):
+        if waitingForResolution: return
         startingDate2 = time.time() -  2 * pastshown
         cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate2])
         tasks = [x[0] for x in cur.fetchall()]
@@ -260,8 +259,7 @@ def getSeconds(text):
         except: return None
     return seconds
         
-def generateTaskText(tid, timestamp, deadline):
-    #return getTaskName(tid)+" "+str(int(round((deadline-timestamp)/60)))
+def generateEntryText(tid, timestamp, deadline):
     seconds = deadline - timestamp
     days, remainder = divmod(seconds, 24*60*60)
     hours, remainder = divmod(remainder, 60*60)
@@ -269,7 +267,10 @@ def generateTaskText(tid, timestamp, deadline):
     timeString = str(int(days))+':' if days > 0 else ''
     timeString += ('0' if days > 0 and hours < 10 else '') + str(int(hours))+':' if days > 0 or hours > 0 else ''
     timeString += ('0' if hours > 0 and minutes < 10 else '') + str(int(minutes))
-    return getTaskName(tid)+" "+  timeString
+    if tid is not None:
+        return getTaskName(tid)+" "+  timeString
+    else:
+        return timeString
 
 def getDateString(deadline):
     try:
@@ -288,15 +289,14 @@ def reloadMain():
     for child in root.winfo_children():
         child.destroy()
         
-    global taskPos, activeTasks, nextMainReload
+    global taskPos, undecidedTasks, nextMainReload, waitingForResolution
     taskPos = 0    
          
     cur.execute("SELECT taskId, startTime, endTime FROM Fights WHERE value = 0")
     rows = cur.fetchall()
-    activeTasks = [x[0] for x in filter(lambda x: x[2] > time.time(), rows)]
+    undecidedTasks = rows
     rows.sort(key = lambda x: x[2], reverse = False)
     timeLeftList = []
-    waitingForResolution = False
     for tid, timestamp, deadline in rows:
         taskFrame= Frame(root)
         timeLeft = deadline - time.time()
@@ -328,6 +328,7 @@ def reloadMain():
             fightButton = Button(taskFrame, text=u"\u2714", fg="white", bg="red")
             fightButton.configure(command=resolveFight(tid, timestamp, deadline, True))
             fightButton.pack(side=RIGHT)
+            entryText.set(generateEntryText(None, 0, defaultCompletionExpiration))
             
         taskFrame.pack()   
     
@@ -347,9 +348,7 @@ def reloadMain():
     quickInfo = Label(entryFrame, textvariable=quickInfoText)
     quickInfo.pack(side=RIGHT)
     entryFrame.pack()
-
-
-    
+   
         
 # load audio
 soundFiles = []
