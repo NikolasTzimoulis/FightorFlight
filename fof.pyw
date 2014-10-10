@@ -302,6 +302,7 @@ def reloadMain():
     undecidedTasks = map(lambda x: x[0], rows)
     rows.sort(key = lambda x: x[2], reverse = False)
     timeLeftList = []
+    waitingForResolution = False
     for tid, timestamp, deadline in rows:
         taskFrame= Frame(root)
         timeLeft = deadline - time.time()
