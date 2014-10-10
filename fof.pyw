@@ -97,9 +97,12 @@ def getCompletionTime(peek=False):
     return completionTime
 
 def periodicProposal():
-    global suggestionSkips, proposalWaitTime
+    global suggestionSkips, proposalWaitTime, undecidedTasks
     suggestionSkips = -1
-    proposeTask(beepThreshold = pastshown)
+    if len(undecidedTasks) == 0:
+        proposeTask(beepThreshold = pastshown)
+    else:
+        proposeTask()
     root.after(proposalWaitTime, periodicProposal)
 
              
