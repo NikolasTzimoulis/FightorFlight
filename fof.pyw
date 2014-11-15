@@ -35,6 +35,7 @@ waitingForResolution = False
 lastSuggestion = None
 quickInfoReset = None
 nextMainReload = None
+nextLevelUpdate = None
 
 def addNewTask(_):
     global pastshown
@@ -238,10 +239,21 @@ def getScore(tid, start, end, plusone = False):
     if score == (actualEnd-actualStart): return 1.0
     return score/(actualEnd-actualStart)
 
-def getLevel():
+def updateLevel():
+    global nextLevelUpdate
     cur.execute("SELECT id FROM Tasks")
-    idList = [x[0]  for x in cur.fetchall()]
-    return sum(map(lambda x:isComplete(x), idList))
+    idList = filter(lambda y: isComplete(y), [x[0]  for x in cur.fetchall()])     
+    # schedule update for when first completion expiration date of a task is reached     
+    if len(idList) > 0:
+        earliestExpirationDate = min(map(lambda x: getCompletionExpirationDate(x), idList))
+        print getDateString(earliestExpirationDate)
+        if nextLevelUpdate is not None: root.after_cancel(nextLevelUpdate)
+        nextLevelUpdate = root.after(int(earliestExpirationDate-time.time())*1000, updateLevel)
+        print int(earliestExpirationDate-time.time())
+    newLevel = len(idList)
+    oldLevel = level.get()
+    if newLevel < oldLevel: playAudio(soundFiles[2])
+    level.set(newLevel)
         
     
     
@@ -356,8 +368,9 @@ def reloadMain():
     quickInfo = Label(entryFrame, textvariable=quickInfoText)
     quickInfo.pack(side=RIGHT)
     entryFrame.pack()
+    updateLevel()
     levelFrame = Frame(root)
-    levelLabel = Label(levelFrame, text=getLevel(), fg='dark red')
+    levelLabel = Label(levelFrame, textvariable=level, fg='dark red')
     levelLabel.pack(side=LEFT)
     levelFrame.pack(side=LEFT)
     
@@ -391,6 +404,8 @@ with con:
 root = Tk()
 entryText = StringVar()
 quickInfoText = StringVar()
+level = IntVar()
+updateLevel()
 root.wm_title("Fight or Flight")
 root.minsize(200, 50)
 root.after(1, reloadMain)
