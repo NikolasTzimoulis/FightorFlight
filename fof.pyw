@@ -66,7 +66,7 @@ def resolveFight(task_id, timeStart, timeEnd, success):
     def resolveFight_inner(_=None):
         global waitingForResolution
         if success:
-            completionTime = getCompletionTime()
+            completionTime = getCompletionTime(False, timeEnd)
             cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, timeEnd])
             if completionTime == float('inf'):
                 playAudio(soundFiles[5]) 
@@ -83,7 +83,7 @@ def resolveFight(task_id, timeStart, timeEnd, success):
         root.after(1, reloadMain)
     return resolveFight_inner     
 
-def getCompletionTime(peek=False):
+def getCompletionTime(peek=False, timeEnd=time.time()):
     global quickInfoReset
     completionTime = getSeconds(entryText.get())
     if completionTime is not None and not peek: 
@@ -91,7 +91,7 @@ def getCompletionTime(peek=False):
     elif completionTime is None:
         completionTime = defaultCompletionExpiration
     if not peek:
-        quickInfoText.set(getDateString(time.time()+completionTime))
+        quickInfoText.set(getDateString(timeEnd+completionTime))
         if quickInfoReset is not None: root.after_cancel(quickInfoReset)
         quickInfoReset = root.after(quickInfoWaitTime, lambda: quickInfoText.set(''))
     return completionTime
@@ -237,6 +237,13 @@ def getScore(tid, start, end, plusone = False):
     
     if score == (actualEnd-actualStart): return 1.0
     return score/(actualEnd-actualStart)
+
+def getLevel():
+    cur.execute("SELECT id FROM Tasks")
+    idList = [x[0]  for x in cur.fetchall()]
+    return sum(map(lambda x:isComplete(x), idList))
+        
+    
     
 def getArrowString(tid, plusone = False):
     startingDate = time.time() -  pastshown 
@@ -338,11 +345,6 @@ def reloadMain():
             
         taskFrame.pack()   
     
-    # schedule reload for when first deadline of an active task is reached     
-    if len(timeLeftList) > 0:
-        if nextMainReload is not None: root.after_cancel(nextMainReload)
-        nextMainReload = root.after(int(min(timeLeftList)*1000), reloadMain)
-    
     entryFrame = Frame(root)
     e = Entry(entryFrame, textvariable=entryText)
     e.pack()
@@ -354,6 +356,15 @@ def reloadMain():
     quickInfo = Label(entryFrame, textvariable=quickInfoText)
     quickInfo.pack(side=RIGHT)
     entryFrame.pack()
+    levelFrame = Frame(root)
+    levelLabel = Label(levelFrame, text=getLevel(), fg='dark red')
+    levelLabel.pack(side=LEFT)
+    levelFrame.pack(side=LEFT)
+    
+    # schedule reload for when first deadline of an active task is reached     
+    if len(timeLeftList) > 0:
+        if nextMainReload is not None: root.after_cancel(nextMainReload)
+        nextMainReload = root.after(int(min(timeLeftList)*1000), reloadMain)
    
         
 # load audio
