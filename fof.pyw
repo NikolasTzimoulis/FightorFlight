@@ -74,7 +74,7 @@ def resolveFight(task_id, timeStart, timeEnd, success):
             elif completionTime > defaultCompletionExpiration:
                 playAudio(soundFiles[4])
             else:
-                playAudio(soundFiles[3])   
+                playAudio(soundFiles[3])     
         elif not success:
             cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])
             rescheduleFight(task_id, timeStart, timeEnd)(None)     
@@ -101,7 +101,7 @@ def periodicProposal():
     global suggestionSkips, proposalWaitTime, undecidedTasks
     suggestionSkips = -1
     if len(undecidedTasks) == 0:
-        proposeTask(beepThreshold = pastshown)
+        proposeTask()
     else:
         proposeTask()
     root.after(proposalWaitTime, periodicProposal)
@@ -165,6 +165,7 @@ def showHistory(tid, plusone=False):
         matplotlib.pyplot.plot(history[::-1], 'ro-')
         matplotlib.pyplot.show()
     return showHistory_inner
+
 
 def showTasks():
     def showTasks_inner(_):
@@ -246,10 +247,8 @@ def updateLevel():
     # schedule update for when first completion expiration date of a task is reached     
     if len(idList) > 0:
         earliestExpirationDate = min(map(lambda x: getCompletionExpirationDate(x), idList))
-        print getDateString(earliestExpirationDate)
         if nextLevelUpdate is not None: root.after_cancel(nextLevelUpdate)
         nextLevelUpdate = root.after(int(earliestExpirationDate-time.time())*1000, updateLevel)
-        print int(earliestExpirationDate-time.time())
     newLevel = len(idList)
     oldLevel = level.get()
     if newLevel < oldLevel: playAudio(soundFiles[2])
