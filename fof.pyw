@@ -150,8 +150,8 @@ def showHistory(tid, plusone=False):
     def showHistory_inner(_):
         end = time.time()
         period = 0
-        history = []        
         improved = None
+        history = []        
         for _ in range(historyGraphLength):
             end = time.time() - period * pastshown 
             start = time.time() -  (period+1) * pastshown 
@@ -165,6 +165,19 @@ def showHistory(tid, plusone=False):
         matplotlib.pyplot.plot(history[::-1], 'ro-')
         matplotlib.pyplot.show()
     return showHistory_inner
+
+def showLevelHistory():
+    def showLevelHistory_inner(_):
+        period = 0
+        history = []        
+        for _ in range(historyGraphLength):
+            timeback = period * pastshown 
+            history.append( len(getCompletedTasks(timeback)) )            
+            period += 1
+        matplotlib.pyplot.clf()
+        matplotlib.pyplot.plot(history[::-1], 'ro-')
+        matplotlib.pyplot.show()
+    return showLevelHistory_inner   
 
 
 def showTasks():
@@ -200,19 +213,19 @@ def getTaskName(tid):
     cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
     return cur.fetchall()[0][0]
 
-def isComplete(tid):
-    if getCompletionExpirationDate(tid) > time.time():
+def isComplete(tid, timeback=0):
+    if getCompletionExpirationDate(tid, timeback) > time.time() - timeback:
         return True
     else:
         return False
     
-def getCompletionExpirationDate(tid):
-    cur.execute("SELECT value, endTime FROM Fights WHERE taskId = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])
+def getCompletionExpirationDate(tid, timeback=0):
+    cur.execute("SELECT value, endTime FROM Fights WHERE taskId = ? AND value > 0 AND endTime <= ? ORDER BY endTime DESC LIMIT 1", [tid, time.time()-timeback])
     try:
         result = cur.fetchall()[0]
         return result[0]+result[1]
     except:
-        return time.time() 
+        return -float("inf")
 
 def unComplete(tid):
     if isComplete(tid):
@@ -242,18 +255,19 @@ def getScore(tid, start, end, plusone = False):
 
 def updateLevel():
     global nextLevelUpdate
-    cur.execute("SELECT id FROM Tasks")
-    idList = filter(lambda y: isComplete(y), [x[0]  for x in cur.fetchall()])     
-    # schedule update for when first completion expiration date of a task is reached     
-    if len(idList) > 0:
+    idList = getCompletedTasks()    
+    # schedule update for when first completion expiration date of a task is reached
+    newLevel  = len(idList)         
+    if newLevel > 0:
         earliestExpirationDate = min(map(lambda x: getCompletionExpirationDate(x), idList))
         if nextLevelUpdate is not None: root.after_cancel(nextLevelUpdate)
         nextLevelUpdate = root.after(int(earliestExpirationDate-time.time())*1000, updateLevel)
-    newLevel = len(idList)
-    oldLevel = level.get()
-    if newLevel < oldLevel: playAudio(soundFiles[2])
+    if newLevel < level.get(): playAudio(soundFiles[2])
     level.set(newLevel)
-        
+    
+def getCompletedTasks(timeback=0):
+    cur.execute("SELECT id FROM Tasks")
+    return filter(lambda tid: isComplete(tid,timeback), [x[0]  for x in cur.fetchall()])
     
     
 def getArrowString(tid, plusone = False):
@@ -370,6 +384,7 @@ def reloadMain():
     updateLevel()
     levelFrame = Frame(root)
     levelLabel = Label(levelFrame, textvariable=level, fg='dark red')
+    levelLabel.bind('<Button-1>', showLevelHistory())
     levelLabel.pack(side=LEFT)
     levelFrame.pack(side=LEFT)
     
