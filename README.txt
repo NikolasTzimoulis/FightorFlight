@@ -10,6 +10,7 @@ Recent Tasks:
 Pledge Progressbar:
 	Progress bar shows how close you are to the end of the pledge.
 	Click anywhere on the Pledge Progressbar to re-schedule the pledge in the Text Field.
+	Triple-click on the Pledge Progressbar to prematurely finish the task successfully.
 	Once the time is up, the progressbar will be replaced by the Fight or Flight Buttons.
 Fight or Flight Buttons:
 	Click on the check mark if the pledge was successful. The task will be marked as completed for the default time period.

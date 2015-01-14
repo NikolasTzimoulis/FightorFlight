@@ -3,7 +3,7 @@ import datetime, os
 
 taskDB = "fof.db"
 logFileName = 'log.txt'
-showOnlyID = 27
+showOnlyID = None
 
 def valueSymbols(val):
     if val == -1: return '-'

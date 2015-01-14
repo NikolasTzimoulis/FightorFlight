@@ -66,16 +66,22 @@ def addNewTask(_):
 def resolveFight(task_id, timeStart, timeEnd, success):
     def resolveFight_inner(_=None):
         global waitingForResolution
-        if success:
-            completionTime = getCompletionTime(False, timeEnd)
-            cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, timeEnd])
+        if success >= 0:
+            if success == 0: 
+                completionTime = 1
+                deadline = time.time()
+                cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [deadline, task_id, timeStart, timeEnd])
+            else:
+                completionTime = getCompletionTime(False, timeEnd)
+                deadline = timeEnd
+            cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
             if completionTime == float('inf'):
                 playAudio(soundFiles[5]) 
             elif completionTime > defaultCompletionExpiration:
                 playAudio(soundFiles[4])
             else:
                 playAudio(soundFiles[3])     
-        elif not success:
+        elif success == -1:
             cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])
             rescheduleFight(task_id, timeStart, timeEnd)(None)     
             playAudio(soundFiles[2])
@@ -200,9 +206,9 @@ def showTasks():
                 #taskLabel.bind('<Button-3>', showHistory(tid))
                 countLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
                 dateLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
-                taskLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], False))
-                countLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], False))
-                dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], False))
+                taskLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
+                countLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
+                dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
                 taskLabel.pack(side=LEFT)
                 countLabel.pack(side=LEFT)
                 dateLabel.pack(side=LEFT)
@@ -303,7 +309,7 @@ def generateEntryText(tid, timestamp, deadline):
     minutes, seconds = divmod(remainder, 60)
     timeString = str(int(days))+':' if days > 0 else ''
     timeString += ('0' if days > 0 and hours < 10 else '') + str(int(hours))+':' if days > 0 or hours > 0 else ''
-    timeString += ('0' if hours > 0 and minutes < 10 else '') + str(int(minutes))
+    timeString += ('0' if (hours > 0 or days > 0) and minutes < 10 else '') + str(int(minutes))
     if tid is not None:
         return getTaskName(tid)+" "+  timeString
     else:
@@ -348,6 +354,7 @@ def reloadMain():
             timeLabel.pack(side=LEFT)
             taskLabel.bind('<Button-1>', rescheduleFight(tid, timestamp, deadline))
             timeLabel.bind('<Button-1>', rescheduleFight(tid, timestamp, deadline))
+            timeLabel.bind('<Triple-Button-1>', resolveFight(tid, timestamp, deadline, 0) )
             if timeLeft > 0:
                 timeLabel.start(1000) 
                 timeLeftList.append(timeLeft)    
@@ -361,10 +368,10 @@ def reloadMain():
             sumFightLabel.bind('<Button-1>', showHistory(tid, True))
             sumFightLabel.pack(side=LEFT)
             flightButton = Button(taskFrame, text=u"\u2717", fg="white", bg="gray60")
-            flightButton.configure(command=resolveFight(tid, timestamp, deadline, False))
+            flightButton.configure(command=resolveFight(tid, timestamp, deadline, -1))
             flightButton.pack(side=RIGHT)
             fightButton = Button(taskFrame, text=u"\u2714", fg="white", bg="red")
-            fightButton.configure(command=resolveFight(tid, timestamp, deadline, True))
+            fightButton.configure(command=resolveFight(tid, timestamp, deadline, 1))
             fightButton.pack(side=RIGHT)
             entryText.set(generateEntryText(None, 0, defaultCompletionExpiration))
             
