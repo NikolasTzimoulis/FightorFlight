@@ -215,6 +215,39 @@ def showTasks():
                 taskFrame.pack()   
     return showTasks_inner
 
+def showStress():
+    def showStress_inner(_):
+        top = Toplevel()
+        top.title("Stress")
+        stressScale = Scale(top, from_=1, to=10, orient=HORIZONTAL)
+        stressScale.set(getCurrentStress())
+        stressScale.bind("<ButtonRelease-1>", updateStress(stressScale, top))
+        stressScale.pack()
+    return showStress_inner
+
+def getCurrentStress():
+    cur.execute("SELECT value FROM Stress ORDER BY time DESC LIMIT 1")
+    try:
+        return cur.fetchall()[0]
+    except:
+        return 0
+    
+def updateStress(stressScale, top):
+    def updateStress_inner(_):
+        cur.execute("INSERT INTO Stress VALUES(?, ?)", [time.time(), stressScale.get()])
+        con.commit()
+        top.destroy()
+        showStressHistory()        
+    return updateStress_inner
+
+def showStressHistory():
+    cur.execute("SELECT time, value FROM Stress WHERE time >= ?", [time.time()-pastshown])
+    stress = cur.fetchall()
+    matplotlib.pyplot.clf()
+    matplotlib.pyplot.plot([x[0] for x in stress], [y[1] for y in stress], 'mo:')
+    matplotlib.pyplot.show()
+    
+
 def getTaskName(tid):
     cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
     return cur.fetchall()[0][0]
@@ -392,6 +425,7 @@ def reloadMain():
     levelFrame = Frame(root)
     levelLabel = Label(levelFrame, textvariable=level, fg='dark red')
     levelLabel.bind('<Button-1>', showLevelHistory())
+    levelLabel.bind('<Button-3>', showStress())
     levelLabel.pack(side=LEFT)
     levelFrame.pack(side=LEFT)
     
@@ -413,6 +447,7 @@ with con:
     try:
         cur.execute("CREATE TABLE Tasks(id INTEGER PRIMARY KEY, name TEXT UNIQUE);")
         cur.execute("CREATE TABLE Fights(startTime INTEGER, endTime INTEGER, value INTEGER, taskId INTEGER, FOREIGN KEY(taskId) REFERENCES Tasks(id));")
+        cur.execute("CREATE TABLE Stress(time INTEGER, value INTEGER)")
         print 'Created new database.'
     except:
         print 'Found existing database.'

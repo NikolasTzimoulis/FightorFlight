@@ -40,12 +40,14 @@ def printlala():
     cur.execute("SELECT * FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name LIKE 'lala%')")
     for startTime, endTime, value, tid in cur.fetchall():
         print datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
-
+        
+def resetStress():        
+    cur.execute("DELETE FROM Stress")
+    
 with con:    
     cur = con.cursor()
     printlala()
     deleteLala()
-    
 
    
    
