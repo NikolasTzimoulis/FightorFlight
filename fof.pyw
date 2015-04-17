@@ -152,21 +152,20 @@ def rescheduleFight(tid, timestamp, deadline, reload=False):
 
 def showHistory(tid, plusone=False):
     def showHistory_inner(_):
-        improved = None
         history = []        
-        cur.execute("SELECT endTime FROM Fights WHERE taskId = ? AND value > 0 AND endTime > ?", [tid, time.time() -  pastshown])
-        dates = [x[0] for x in cur.fetchall()]
-        for i in reversed(range(len(dates))):
-            end = dates[i+1] if i<len(dates)-1 else time.time()
-            start = dates[i] 
-            if plusone and improved is None: improved = getScore(tid, start, end, True)
-            history.append( getScore(tid, start, end) )            
+        cur.execute("SELECT endTime, startTime, value FROM Fights WHERE taskId = ? AND value > ? AND endTime > ?", [tid, -1 if plusone else 0,time.time() -  pastshown])
+        results = cur.fetchall()
+        dates = [x[0] for x in results]
+        scores = [(x[0]-x[1]+(x[2] if x[2]>0 else defaultCompletionExpiration))/60/60/24 for x in results]          
         matplotlib.pyplot.clf()
-        if plusone:
-            matplotlib.pyplot.plot(dates, history[::-1], 'ko-')
-            history[0] = improved
-        matplotlib.pyplot.plot(dates, history[::-1], 'ro-')
-        matplotlib.pyplot.show()
+        if len(dates)>0:
+            if plusone:
+                matplotlib.pyplot.plot(dates, scores, 'ko-')
+                results2 = filter(lambda y: y[2]>0, results)
+                dates = [x[0] for x in results2]
+                scores = [(x[0]-x[1]+x[2])/60/60/24 for x in results2]                
+            matplotlib.pyplot.plot(dates, scores, 'ro-')
+            matplotlib.pyplot.show()
     return showHistory_inner
 
 def showLevelHistory():
@@ -189,7 +188,6 @@ def showTasks():
     def showTasks_inner(_):
         if waitingForResolution: return
         startingDate = time.time() -  pastshown
-        nowDate = time.time()
         cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate])
         tasks = [x[0] for x in cur.fetchall()]
         if len(tasks) > 0:
