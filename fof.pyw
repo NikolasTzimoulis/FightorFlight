@@ -152,20 +152,22 @@ def rescheduleFight(tid, timestamp, deadline, reload=False):
 
 def showHistory(tid, plusone=False):
     def showHistory_inner(_):
-        history = []        
         cur.execute("SELECT endTime, startTime, value FROM Fights WHERE taskId = ? AND value > ? AND endTime > ?", [tid, -1 if plusone else 0,time.time() -  pastshown])
+        now = time.time()
         results = cur.fetchall()
-        dates = [x[0] for x in results]
-        scores = [(x[0]-x[1]+(x[2] if x[2]>0 else defaultCompletionExpiration))/60/60/24 for x in results]          
+        resultsDone = filter(lambda y: y[2]>0, results)
+        dates = [(x[0]-now)/60/60/24 for x in resultsDone]
+        scores = [(x[0]-x[1]+x[2])/60/60/24 for x in resultsDone]
         matplotlib.pyplot.clf()
-        if len(dates)>0:
-            if plusone:
-                matplotlib.pyplot.plot(dates, scores, 'ko-')
-                results2 = filter(lambda y: y[2]>0, results)
-                dates = [x[0] for x in results2]
-                scores = [(x[0]-x[1]+x[2])/60/60/24 for x in results2]                
-            matplotlib.pyplot.plot(dates, scores, 'ro-')
-            matplotlib.pyplot.show()
+        if len(dates) > 0: matplotlib.pyplot.stem(dates, scores, linefmt='r-', markerfmt='ro')        
+        resultsUndecided = filter(lambda y: y[2]==0, results)
+        if len(resultsUndecided) >0:
+            dates = [(x[0]-now)/60/60/24 for x in resultsUndecided]
+            scores = [(x[0]-x[1]+(x[2] if x[2]>0 else getCompletionTime(True,x[0])))/60/60/24 for x in resultsUndecided]               
+            matplotlib.pyplot.stem(dates, scores, linefmt='r-.', markerfmt='ro')
+            ax = matplotlib.pyplot.axis()
+            matplotlib.pyplot.axis([ax[0], ax[1]+1, ax[2], ax[3]]) 
+        matplotlib.pyplot.show()
     return showHistory_inner
 
 def showLevelHistory():
@@ -174,12 +176,14 @@ def showLevelHistory():
         history = []      
         now = time.time()
         cur.execute("SELECT endTime FROM Fights WHERE value > 0 AND endTime > ?", [now - pastshown])
-        dates = [x[0] for x in cur.fetchall()]  
+        dates = [x[0] for x in cur.fetchall()]
+        dates.append(now)  
         for d in dates:             
             history.append( len(getCompletedTasks(now-d)) )            
             period += 1
         matplotlib.pyplot.clf()
-        matplotlib.pyplot.plot(dates, history[::-1], 'ro-')
+        dates = map(lambda x:(x-now)/60/60/24, dates)
+        matplotlib.pyplot.plot(dates, history, 'ro-')
         matplotlib.pyplot.show()
     return showLevelHistory_inner   
 
