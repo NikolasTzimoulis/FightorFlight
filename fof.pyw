@@ -19,14 +19,12 @@ try:
     proposalWaitTime = config.getint(config.sections()[0], "proposalwaittime") * 1000 * 60
     quickInfoWaitTime = config.getint(config.sections()[0], "quickinfowaittime") * 1000
     defaultCompletionExpiration = config.getint(config.sections()[0], "defaultcompletionexpiration") * 60 * 60
-    historyGraphLength = config.getint(config.sections()[0], "historygraphlength")
 except:
     print "Could not load config file. Reverting to default values."
     pastshown = 30 * 24 * 60 * 60
     proposalWaitTime = 60 * 60 * 1000
     quickInfoWaitTime = 5 * 1000
     defaultCompletionExpiration = 12 * 60 * 60
-    historyGraphLength = 10
 suggestionSkips = -1
 clockStrings = {}
 undecidedTasks = []
@@ -154,19 +152,22 @@ def rescheduleFight(tid, timestamp, deadline, reload=False):
 
 def showHistory(tid, plusone=False):
     def showHistory_inner(_):
+        start = time.time() -  pastshown
         end = time.time()
         period = 0
         improved = None
         history = []        
-        for _ in range(historyGraphLength):
-            end = time.time() - period * pastshown 
-            start = time.time() -  (period+1) * pastshown 
+        cur.execute("SELECT endTime FROM Fights WHERE taskId = ? AND value > 0 AND endTime > ?", [tid, start])
+        dates = [x[0] for x in cur.fetchall()]
+        for i in reversed(range(len(dates)-1)):
+            end = dates[i+1] 
+            start = dates[i] 
             if plusone and improved is None: improved = getScore(tid, start, end, True)
             history.append( getScore(tid, start, end) )            
             period += 1
         matplotlib.pyplot.clf()
         if plusone:
-            matplotlib.pyplot.plot(history[::-1], 'ko-')
+            matplotlib.pyplot.plot(dates, history[::-1], 'ko-')
             history[0] = improved
         matplotlib.pyplot.plot(history[::-1], 'ro-')
         matplotlib.pyplot.show()
@@ -175,13 +176,15 @@ def showHistory(tid, plusone=False):
 def showLevelHistory():
     def showLevelHistory_inner(_):
         period = 0
-        history = []        
-        for _ in range(historyGraphLength):
-            timeback = period * pastshown 
-            history.append( len(getCompletedTasks(timeback)) )            
+        history = []      
+        now = time.time()
+        cur.execute("SELECT endTime FROM Fights WHERE value > 0 AND endTime > ?", [now - pastshown])
+        dates = [x[0] for x in cur.fetchall()]  
+        for d in dates:             
+            history.append( len(getCompletedTasks(now-d)) )            
             period += 1
         matplotlib.pyplot.clf()
-        matplotlib.pyplot.plot(history[::-1], 'ro-')
+        matplotlib.pyplot.plot(dates, history[::-1], 'ro-')
         matplotlib.pyplot.show()
     return showLevelHistory_inner   
 
@@ -203,9 +206,8 @@ def showTasks():
                 cur.execute("SELECT startTime, endTime FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])                       
                 lastFight = cur.fetchall()[0]
                 taskLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
-                #taskLabel.bind('<Button-3>', showHistory(tid))
-                countLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
-                dateLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
+                countLabel.bind('<Button-1>', showHistory(tid))
+                #dateLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
                 taskLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
                 countLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
                 dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
