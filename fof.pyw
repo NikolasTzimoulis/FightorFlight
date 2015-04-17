@@ -152,24 +152,20 @@ def rescheduleFight(tid, timestamp, deadline, reload=False):
 
 def showHistory(tid, plusone=False):
     def showHistory_inner(_):
-        start = time.time() -  pastshown
-        end = time.time()
-        period = 0
         improved = None
         history = []        
-        cur.execute("SELECT endTime FROM Fights WHERE taskId = ? AND value > 0 AND endTime > ?", [tid, start])
+        cur.execute("SELECT endTime FROM Fights WHERE taskId = ? AND value > 0 AND endTime > ?", [tid, time.time() -  pastshown])
         dates = [x[0] for x in cur.fetchall()]
-        for i in reversed(range(len(dates)-1)):
-            end = dates[i+1] 
+        for i in reversed(range(len(dates))):
+            end = dates[i+1] if i<len(dates)-1 else time.time()
             start = dates[i] 
             if plusone and improved is None: improved = getScore(tid, start, end, True)
             history.append( getScore(tid, start, end) )            
-            period += 1
         matplotlib.pyplot.clf()
         if plusone:
             matplotlib.pyplot.plot(dates, history[::-1], 'ko-')
             history[0] = improved
-        matplotlib.pyplot.plot(history[::-1], 'ro-')
+        matplotlib.pyplot.plot(dates, history[::-1], 'ro-')
         matplotlib.pyplot.show()
     return showHistory_inner
 
@@ -192,8 +188,9 @@ def showLevelHistory():
 def showTasks():
     def showTasks_inner(_):
         if waitingForResolution: return
-        startingDate2 = time.time() -  2 * pastshown
-        cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate2])
+        startingDate = time.time() -  pastshown
+        nowDate = time.time()
+        cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate])
         tasks = [x[0] for x in cur.fetchall()]
         if len(tasks) > 0:
             top = Toplevel()
@@ -201,19 +198,19 @@ def showTasks():
                 completed = isComplete(tid)
                 taskFrame= Frame(top)
                 taskLabel = Label(taskFrame, text=getTaskName(tid), fg='dark red' if completed else 'black')
-                countLabel = Label(taskFrame, text=getArrowString(tid), fg='dark red' if completed else 'black')
-                dateLabel = Label(taskFrame, text = getDateString(getCompletionExpirationDate(tid)) if completed else '', fg='dark red')               
+                scoreCanvas = getScoreCanvas(taskFrame, tid)
+                #dateLabel = Label(taskFrame, text = getDateString(getCompletionExpirationDate(tid)) if completed else '', fg='dark red')               
                 cur.execute("SELECT startTime, endTime FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])                       
                 lastFight = cur.fetchall()[0]
                 taskLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
-                countLabel.bind('<Button-1>', showHistory(tid))
-                #dateLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
+                scoreCanvas.bind('<Button-1>', showHistory(tid))
+                #dateLabel.bind('<Button-1>', showHistory(tid))
                 taskLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
-                countLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
-                dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
+                scoreCanvas.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
+                #dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
                 taskLabel.pack(side=LEFT)
-                countLabel.pack(side=LEFT)
-                dateLabel.pack(side=LEFT)
+                scoreCanvas.pack(side=LEFT)
+                #dateLabel.pack(side=LEFT)
                 taskFrame.pack()   
     return showTasks_inner
 
@@ -310,19 +307,6 @@ def getCompletedTasks(timeback=0):
     cur.execute("SELECT id FROM Tasks")
     return filter(lambda tid: isComplete(tid,timeback), [x[0]  for x in cur.fetchall()])
     
-    
-def getArrowString(tid, plusone = False):
-    startingDate = time.time() -  pastshown 
-    startingDate2 = time.time() -  2 * pastshown 
-    lastFightTotal2 = getScore(tid, startingDate2, startingDate)
-    lastFightTotal1 = getScore(tid, startingDate, time.time(), plusone)
-    if lastFightTotal1 > lastFightTotal2:
-        arrow = u'\u279a'
-    elif lastFightTotal1 == lastFightTotal2:
-        arrow = u'\u2192'
-    else:
-        arrow = u'\u2798'    
-    return str(round(lastFightTotal2,2)) + arrow + str(round(lastFightTotal1,2)) + ('?' if plusone else '')
 
 def getSeconds(text):
     timeList = text.split(':')
@@ -355,6 +339,14 @@ def getDateString(deadline):
         return datetime.datetime.fromtimestamp(deadline).strftime('%Y-%m-%d, %H:%M')
     except:
         return u'\u221e'
+    
+def getScoreCanvas(parent, tid, plusone = False, extraspace = 0):
+    startingDate = time.time() - pastshown
+    nowDate = time.time()
+    scoreCanvas = Canvas(parent, width=10+extraspace, height=10, borderwidth=0, highlightthickness=0)
+    scoreCanvas.create_rectangle(0, 10, 10, 0, width = 0, fill='gray60')
+    scoreCanvas.create_rectangle(0, 10, 10*getScore(tid, startingDate, nowDate, plusone), 0, width = 0, fill='red')
+    return scoreCanvas
           
 def playAudio(filename):
     if filename.endswith('wav'):
@@ -398,10 +390,10 @@ def reloadMain():
             waitingForResolution = True
             taskLabel = Label(taskFrame, text=getTaskName(tid), fg='black')
             taskLabel.pack(side=LEFT)
-            sumFightLabel = Label(taskFrame, text=getArrowString(tid, plusone=True), fg='black')
+            scoreCanvas = getScoreCanvas(taskFrame, tid, plusone = True, extraspace = 5)
             taskLabel.bind('<Button-1>', showHistory(tid, True))
-            sumFightLabel.bind('<Button-1>', showHistory(tid, True))
-            sumFightLabel.pack(side=LEFT)
+            scoreCanvas.bind('<Button-1>', showHistory(tid, True))
+            scoreCanvas.pack(side=LEFT)
             flightButton = Button(taskFrame, text=u"\u2717", fg="white", bg="gray60")
             flightButton.configure(command=resolveFight(tid, timestamp, deadline, -1))
             flightButton.pack(side=RIGHT)
