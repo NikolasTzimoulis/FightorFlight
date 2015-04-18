@@ -165,8 +165,8 @@ def showHistory(tid, plusone=False):
             dates = [(x[0]-now)/60/60/24 for x in resultsUndecided]
             scores = [(x[0]-x[1]+(x[2] if x[2]>0 else getCompletionTime(True,x[0])))/60/60/24 for x in resultsUndecided]               
             matplotlib.pyplot.stem(dates, scores, linefmt='r-.', markerfmt='ro')
-            ax = matplotlib.pyplot.axis()
-            matplotlib.pyplot.axis([ax[0], ax[1]+1, ax[2], ax[3]]) 
+        ax = matplotlib.pyplot.axis()
+        matplotlib.pyplot.axis([ax[0], ax[1]+1, ax[2], ax[3]]) 
         matplotlib.pyplot.show()
     return showHistory_inner
 
