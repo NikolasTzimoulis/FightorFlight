@@ -156,17 +156,18 @@ def showHistory(tid, plusone=False):
         now = time.time()
         results = cur.fetchall()
         resultsDone = filter(lambda y: y[2]>0, results)
-        dates = [(x[0]-now)/60/60/24 for x in resultsDone]
+        dates = [(x[1]-now)/60/60/24 for x in resultsDone]
         scores = [(x[0]-x[1]+x[2])/60/60/24 for x in resultsDone]
         matplotlib.pyplot.clf()
-        if len(dates) > 0: matplotlib.pyplot.stem(dates, scores, linefmt='r-', markerfmt='ro')        
+        if len(dates) > 0:     
+            matplotlib.pyplot.bar(dates, scores, scores, color='r')
         resultsUndecided = filter(lambda y: y[2]==0, results)
-        if len(resultsUndecided) >0:
-            dates = [(x[0]-now)/60/60/24 for x in resultsUndecided]
+        if len(resultsUndecided) > 0:
+            dates = [(x[1]-now)/60/60/24 for x in resultsUndecided]
             scores = [(x[0]-x[1]+(x[2] if x[2]>0 else getCompletionTime(True,x[0])))/60/60/24 for x in resultsUndecided]               
-            matplotlib.pyplot.stem(dates, scores, linefmt='r-.', markerfmt='ro')
+            matplotlib.pyplot.bar(dates, scores, scores, color='none', edgecolor='r')
         ax = matplotlib.pyplot.axis()
-        matplotlib.pyplot.axis([ax[0], ax[1]+1, ax[2], ax[3]]) 
+        matplotlib.pyplot.axis([-pastshown/60/60/24, ax[1]+1, ax[2], ax[3]]) 
         matplotlib.pyplot.show()
     return showHistory_inner
 
@@ -211,7 +212,8 @@ def showTasks():
                 scoreCanvas.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
                 #dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
                 taskLabel.pack(side=LEFT)
-                scoreCanvas.pack(side=LEFT)
+                if completed:
+                    scoreCanvas.pack(side=LEFT)
                 #dateLabel.pack(side=LEFT)
                 taskFrame.pack()   
     return showTasks_inner
