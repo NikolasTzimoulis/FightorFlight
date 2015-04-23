@@ -1,10 +1,10 @@
 Text Field
 =======
-* Type <taskname> <time> in the text field then press ENTER to create new pledge. A Task Progressbar will show up.
+* Type **taskname time** in the text field then press ENTER to create new pledge. A Task Progressbar will show up.
 * Press UP or DOWN arrows in the text field to get suggestions from pledges that occured around the same time in previous days.
 * Right-click in the text field to view Recent Tasks.
-* Type a <time> and press ENTER to change the time window.
-* <time> is <days:hours:minutes> but you can omit days and hours if you want.
+* Type a **time** and press ENTER to change the time window.
+* **time** is **days:hours:minutes** but you can omit days and hours if you want.
 
 Recent Tasks
 =======
