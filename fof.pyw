@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import matplotlib.pyplot
 matplotlib.use('TkAgg')
 from Tkinter import *
@@ -156,18 +157,24 @@ def showHistory(tid, plusone=False):
         now = time.time()
         results = cur.fetchall()
         resultsDone = filter(lambda y: y[2]>0, results)
-        dates = [(x[1]-now)/60/60/24 for x in resultsDone]
-        scores = [(x[0]-x[1]+x[2])/60/60/24 for x in resultsDone]
+        dates = [float(x[1]-now)/60/60/24 for x in resultsDone]
+        scores = [float(x[0]-x[1]+x[2])/60/60/24 for x in resultsDone]
+        completions = [float(x[2])/60/60/24 for x in resultsDone]
+        durations = [float(x[0]-x[1])/60/60/24 for x in resultsDone] 
         matplotlib.pyplot.clf()
-        if len(dates) > 0:     
-            matplotlib.pyplot.bar(dates, scores, scores, color='r')
+        if len(dates) > 0:
+            matplotlib.pyplot.bar(dates, durations, scores, color='r', linewidth=0.5)     
+            matplotlib.pyplot.bar(dates, completions, scores, bottom=durations, color='r', linewidth=0.5)
         resultsUndecided = filter(lambda y: y[2]==0, results)
         if len(resultsUndecided) > 0:
-            dates = [(x[1]-now)/60/60/24 for x in resultsUndecided]
-            scores = [(x[0]-x[1]+(x[2] if x[2]>0 else getCompletionTime(True,x[0])))/60/60/24 for x in resultsUndecided]               
-            matplotlib.pyplot.bar(dates, scores, scores, color='none', edgecolor='r')
+            dates = [float(x[1]-now)/60/60/24 for x in resultsUndecided]
+            scores = [float(x[0]-x[1]+getCompletionTime(True,x[0]))/60/60/24 for x in resultsUndecided]
+            completions = [float(getCompletionTime(True,x[0]))/60/60/24 for x in resultsUndecided]
+            durations = [float(x[0]-x[1])/60/60/24 for x in resultsUndecided]
+            matplotlib.pyplot.bar(dates, durations, scores, color='none', edgecolor='r', linewidth=2)
+            matplotlib.pyplot.bar(dates, completions, scores, bottom=durations, color='none', edgecolor='r', linewidth=2)
         ax = matplotlib.pyplot.axis()
-        matplotlib.pyplot.axis([-pastshown/60/60/24, ax[1]+1, ax[2], ax[3]]) 
+        matplotlib.pyplot.axis([-float(pastshown)/60/60/24, 1.1*(dates[-1]+scores[-1]), ax[2], ax[3]])
         matplotlib.pyplot.show()
     return showHistory_inner
 
@@ -183,7 +190,7 @@ def showLevelHistory():
             history.append( len(getCompletedTasks(now-d)) )            
             period += 1
         matplotlib.pyplot.clf()
-        dates = map(lambda x:(x-now)/60/60/24, dates)
+        dates = map(lambda x:float(x-now)/60/60/24, dates)
         matplotlib.pyplot.plot(dates, history, 'ro-')
         matplotlib.pyplot.show()
     return showLevelHistory_inner   
@@ -199,8 +206,12 @@ def showTasks():
             top = Toplevel()
             for tid in sorted(tasks, key=lambda x:getCompletionExpirationDate(x)):
                 completed = isComplete(tid)
+                running = isRunning(tid)
                 taskFrame= Frame(top)
-                taskLabel = Label(taskFrame, text=getTaskName(tid), fg='dark red' if completed else 'black')
+                foregroundColour = 'black'
+                if completed: foregroundColour = 'dark red' 
+                elif running: foregroundColour = 'dark green'
+                taskLabel = Label(taskFrame, text=getTaskName(tid), fg=foregroundColour)
                 scoreCanvas = getScoreCanvas(taskFrame, tid)
                 #dateLabel = Label(taskFrame, text = getDateString(getCompletionExpirationDate(tid)) if completed else '', fg='dark red')               
                 cur.execute("SELECT startTime, endTime FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])                       
@@ -260,7 +271,7 @@ def isComplete(tid, timeback=0):
         return True
     else:
         return False
-    
+      
 def getCompletionExpirationDate(tid, timeback=0):
     cur.execute("SELECT value, endTime FROM Fights WHERE taskId = ? AND value > 0 AND endTime <= ? ORDER BY endTime DESC LIMIT 1", [tid, time.time()-timeback])
     try:
@@ -268,6 +279,11 @@ def getCompletionExpirationDate(tid, timeback=0):
         return result[0]+result[1]
     except:
         return -float("inf")
+    
+def isRunning(tid):
+    cur.execute("SELECT COUNT(*) FROM Fights WHERE taskId = ? AND value = 0 AND endTime > ?", [tid, time.time()])
+    if cur.fetchall()[0][0] > 0: return True
+    else: return False
 
 def unComplete(tid):
     if isComplete(tid):
