@@ -153,7 +153,7 @@ def rescheduleFight(tid, timestamp, deadline, reload=False):
 
 def showHistory(tid, plusone=False):
     def showHistory_inner(_):
-        cur.execute("SELECT endTime, startTime, value FROM Fights WHERE taskId = ? AND value > ? AND endTime > ?", [tid, -1 if plusone else 0,time.time() -  pastshown])
+        cur.execute("SELECT endTime, startTime, value FROM Fights WHERE taskId = ? AND value > ? AND endTime+value > ?", [tid, -1 if plusone else 0,time.time() -  pastshown])
         now = time.time()
         results = cur.fetchall()
         resultsDone = filter(lambda y: y[2]>0, results)
@@ -174,7 +174,7 @@ def showHistory(tid, plusone=False):
             matplotlib.pyplot.bar(dates, durations, scores, color='none', edgecolor='r', linewidth=2)
             matplotlib.pyplot.bar(dates, completions, scores, bottom=durations, color='none', edgecolor='r', linewidth=2)
         ax = matplotlib.pyplot.axis()
-        matplotlib.pyplot.axis([-float(pastshown)/60/60/24, 1.1*(dates[-1]+scores[-1]), ax[2], ax[3]])
+        matplotlib.pyplot.axis([-float(pastshown)/60/60/24, dates[-1]+scores[-1], ax[2], ax[3]])
         matplotlib.pyplot.show()
     return showHistory_inner
 
@@ -363,9 +363,10 @@ def getDateString(deadline):
 def getScoreCanvas(parent, tid, plusone = False, extraspace = 0):
     startingDate = time.time() - pastshown
     nowDate = time.time()
+    score = getScore(tid, startingDate, nowDate, plusone)
     scoreCanvas = Canvas(parent, width=10+extraspace, height=10, borderwidth=0, highlightthickness=0)
     scoreCanvas.create_rectangle(0, 10, 10, 0, width = 0, fill='gray60')
-    scoreCanvas.create_rectangle(0, 10, 10*getScore(tid, startingDate, nowDate, plusone), 0, width = 0, fill='red')
+    scoreCanvas.create_rectangle(0, 10, 10*score, 0, width = 2 if score>0.99 else 0, fill='red')
     return scoreCanvas
           
 def playAudio(filename):
