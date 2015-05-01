@@ -66,6 +66,7 @@ def resolveFight(task_id, timeStart, timeEnd, success):
     def resolveFight_inner(_=None):
         global waitingForResolution
         if success >= 0:
+            oldScore = getScore(task_id, time.time()-pastshown, time.time())
             if success == 0: 
                 completionTime = 1
                 deadline = time.time()
@@ -74,9 +75,11 @@ def resolveFight(task_id, timeStart, timeEnd, success):
                 completionTime = getCompletionTime(False, timeEnd)
                 deadline = timeEnd
             cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
-            if completionTime == float('inf'):
+            con.commit()
+            newScore = getScore(task_id, time.time()-pastshown, time.time())
+            if newScore >= 0.99 and oldScore < 0.99: 
                 playAudio(soundFiles[5]) 
-            elif completionTime > defaultCompletionExpiration:
+            elif newScore >= 0.5 and oldScore < 0.5:  
                 playAudio(soundFiles[4])
             else:
                 playAudio(soundFiles[3])     
@@ -141,14 +144,14 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
     if days > maxDays:
         suggestionSkips -= 1
     
-def rescheduleFight(tid, timestamp, deadline, reload=False):
+def rescheduleFight(tid, timestamp, deadline, reloadAfter=False):
     def rescheduleFight_inner(_):
         global quickInfoReset
         entryText.set(generateEntryText(tid, timestamp,deadline))
         quickInfoText.set(getDateString(deadline))
         if quickInfoReset is not None: root.after_cancel(quickInfoReset)
         quickInfoReset = root.after(quickInfoWaitTime, lambda: quickInfoText.set(''))    
-        if reload: root.after(1, reloadMain)    
+        if reloadAfter: root.after(1, reloadMain)    
     return rescheduleFight_inner
 
 def showHistory(tid, plusone=False):
@@ -291,7 +294,7 @@ def unComplete(tid):
         deadline = cur.fetchall()[0][0]
         cur.execute("UPDATE Fights SET value = ? WHERE taskId = ? AND endTime =  ?", [time.time() - deadline, tid, deadline])
         
-def getScore(tid, start, end, plusone = False):   
+def getScore(tid, start, end, plusone = False):
     if not plusone:
         cur.execute("SELECT startTime, endTime, value FROM Fights WHERE taskID = ? AND value > 0 AND endTime+value >= ? AND startTime <= ?", [tid, start, end])
     else:
@@ -366,7 +369,7 @@ def getScoreCanvas(parent, tid, plusone = False, extraspace = 0):
     score = getScore(tid, startingDate, nowDate, plusone)
     scoreCanvas = Canvas(parent, width=10+extraspace, height=10, borderwidth=0, highlightthickness=0)
     scoreCanvas.create_rectangle(0, 10, 10, 0, width = 0, fill='gray60')
-    scoreCanvas.create_rectangle(0, 10, 10*score, 0, width = 2 if score>0.99 else 0, fill='red')
+    scoreCanvas.create_rectangle(0, 10, 10*score, 0, width = 2 if score>=0.99 else 0, fill='red')
     return scoreCanvas
           
 def playAudio(filename):

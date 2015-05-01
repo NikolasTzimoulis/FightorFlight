@@ -3,6 +3,7 @@ import time
 import datetime
 import encodings
 
+
 taskDB = "fof.db"
 con = lite.connect(taskDB)
 
@@ -39,7 +40,8 @@ def deleteLala():
 def printlala():
     cur.execute("SELECT * FROM Fights WHERE taskID = (SELECT id FROM Tasks WHERE name LIKE 'lala%')")
     for startTime, endTime, value, tid in cur.fetchall():
-        print datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
+        cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
+        print cur.fetchall()[0][0], datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
         
 def resetStress():        
     cur.execute("DELETE FROM Stress")
