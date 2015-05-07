@@ -415,7 +415,7 @@ def reloadMain():
             taskLabel = Label(taskFrame, text=getTaskName(tid), fg='black')
             taskLabel.pack(side=LEFT)
             scoreCanvas = getScoreCanvas(taskFrame, tid, plusone = True, extraspace = 5)
-            taskLabel.bind('<Button-1>', showHistory(tid, True))
+            #taskLabel.bind('<Button-1>', rescheduleFight(tid, timestamp, deadline))
             scoreCanvas.bind('<Button-1>', showHistory(tid, True))
             scoreCanvas.pack(side=LEFT)
             flightButton = Button(taskFrame, text=u"\u2717", fg="white", bg="gray60")

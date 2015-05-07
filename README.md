@@ -11,7 +11,7 @@ Recent Tasks
 * Click on a task to re-schedule its last successful pledge in the Text Field.
 * Triple middle-click on a task to delete the last successful pledge of this task.
 * A square will appear next to tasks on cooldown, indicating the task's overall score.
-* Click on the square to get a score chart for the past time window.
+* Click on the square to get a successful pledges chart for the past time window.
 
 Pledge Progressbar
 =======
@@ -26,6 +26,6 @@ Fight or Flight Buttons
 * Before clicking the check mark, type a <time> in the Text Field to change the cooldown duration.
 * Click on the x mark if the pledge was not succesful.
 * Next to the buttons, you can see a square indicating the task's overall score for the past time window.
-* Click anywhere on the text or the square to get a score chart for the past time window.
+* Click on the square to get a successful pledges chart for the past time window.
 	
 	
