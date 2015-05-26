@@ -1,13 +1,16 @@
 Text Field
 =======
 * Type **taskname time** in the text field then press ENTER to create new pledge. A Task Progressbar will show up.
-* Press UP or DOWN arrows in the text field to get suggestions from pledges that occured around the same time in previous days.
+* Press UP or DOWN arrows in the text field to get suggestions from pledges that occured around the same time in previous days. Only suggestions for the main task will show if the main task is not on cooldown or currently running.
 * Right-click in the text field to view Recent Tasks.
 * Type a **time** and press ENTER to change the time window.
 * **time** is **days:hours:minutes** but you can omit days and hours if you want.
 
 Recent Tasks
 =======
+* Currently running tasks show in green font.
+* Tasks on cooldown show in red font.
+* The main task shows with a white background.
 * Click on a task to re-schedule its last successful pledge in the Text Field.
 * Triple middle-click on a task to delete the last successful pledge of this task.
 * A square will appear next to tasks on cooldown, indicating the task's overall score.

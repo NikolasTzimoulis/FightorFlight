@@ -35,6 +35,7 @@ lastSuggestion = None
 quickInfoReset = None
 nextMainReload = None
 nextLevelUpdate = None
+mainTask = None
 
 def addNewTask(_):
     global pastshown
@@ -108,16 +109,14 @@ def getCompletionTime(peek=False, timeEnd=time.time()):
 def periodicProposal():
     global suggestionSkips, proposalWaitTime, undecidedTasks
     suggestionSkips = -1
-    if len(undecidedTasks) == 0:
-        proposeTask()
-    else:
-        proposeTask()
+    proposeTask()
     root.after(proposalWaitTime, periodicProposal)
 
              
 def proposeTask(skipChange = 0, beepThreshold = 0):
     global suggestionSkips, undecidedTasks
     if waitingForResolution: return
+    determineMainTask()     
     suggestionSkips += skipChange
     if suggestionSkips < 0: suggestionSkips = 0
     found = False
@@ -132,6 +131,8 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
         for fight in rows:
             if fight[0] in undecidedTasks or isComplete(fight[0]):
                 continue
+            elif not isComplete(mainTask) and not mainTask in undecidedTasks and fight[0] != mainTask:
+                continue
             elif skipsLeft > 0:
                 skipsLeft -= 1
                 continue
@@ -143,6 +144,20 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
                 break
     if days > maxDays:
         suggestionSkips -= 1
+        
+def determineMainTask():
+    global mainTask
+    endDate = time.time()
+    startingDate = endDate -  pastshown
+    cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate])
+    tasks = [x[0] for x in cur.fetchall()]
+    scores = map(lambda tid:getScore(tid, startingDate, endDate), tasks)
+    maxScore = 0
+    for i in range(len(scores)):
+        if scores[i] > maxScore and scores[i] < 0.99: 
+            maxScore = scores[i]
+            mainTask = tasks[i]
+    
     
 def rescheduleFight(tid, timestamp, deadline, reloadAfter=False):
     def rescheduleFight_inner(_):
@@ -214,7 +229,10 @@ def showTasks():
                 foregroundColour = 'black'
                 if completed: foregroundColour = 'dark red' 
                 elif running: foregroundColour = 'dark green'
-                taskLabel = Label(taskFrame, text=getTaskName(tid), fg=foregroundColour)
+                if tid==mainTask: 
+                    taskLabel = Label(taskFrame, text=getTaskName(tid), fg=foregroundColour, bg='white')
+                else:
+                    taskLabel = Label(taskFrame, text=getTaskName(tid), fg=foregroundColour)
                 scoreCanvas = getScoreCanvas(taskFrame, tid)
                 #dateLabel = Label(taskFrame, text = getDateString(getCompletionExpirationDate(tid)) if completed else '', fg='dark red')               
                 cur.execute("SELECT startTime, endTime FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])                       
@@ -367,6 +385,7 @@ def getScoreCanvas(parent, tid, plusone = False, extraspace = 0):
     startingDate = time.time() - pastshown
     nowDate = time.time()
     score = getScore(tid, startingDate, nowDate, plusone)
+    #print getTaskName(tid), int(100*score), '%'
     scoreCanvas = Canvas(parent, width=10+extraspace, height=10, borderwidth=0, highlightthickness=0)
     scoreCanvas.create_rectangle(0, 10, 10, 0, width = 0, fill='gray60')
     scoreCanvas.create_rectangle(0, 10, 10*score, 0, width = 2 if score>=0.99 else 0, fill='red')
@@ -439,13 +458,13 @@ def reloadMain():
     quickInfo = Label(entryFrame, textvariable=quickInfoText)
     quickInfo.pack(side=RIGHT)
     entryFrame.pack()
-    updateLevel()
-    levelFrame = Frame(root)
-    levelLabel = Label(levelFrame, textvariable=level, fg='dark red')
-    levelLabel.bind('<Button-1>', showLevelHistory())
-    levelLabel.bind('<Button-3>', showStress())
-    levelLabel.pack(side=LEFT)
-    levelFrame.pack(side=LEFT)
+    #updateLevel()
+    #levelFrame = Frame(root)
+    #levelLabel = Label(levelFrame, textvariable=level, fg='dark red')
+    #levelLabel.bind('<Button-1>', showLevelHistory())
+    #levelLabel.bind('<Button-3>', showStress())
+    #levelLabel.pack(side=LEFT)
+    #levelFrame.pack(side=LEFT)
     
     # schedule reload for when first deadline of an active task is reached     
     if len(timeLeftList) > 0:
