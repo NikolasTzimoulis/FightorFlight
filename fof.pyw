@@ -35,7 +35,7 @@ lastSuggestion = None
 quickInfoReset = None
 nextMainReload = None
 nextLevelUpdate = None
-mainTask = None
+focusTasks = []
 
 def addNewTask(_):
     global pastshown
@@ -61,6 +61,7 @@ def addNewTask(_):
         pastshown = duration
         config.set(config.sections()[0], "pastshown", int(pastshown / 24 / 60 / 60))
         entryText.set("")   
+        determineFocusTasks(True)
         root.after(1, reloadMain)
 
 def resolveFight(task_id, timeStart, timeEnd, success):
@@ -113,10 +114,10 @@ def periodicProposal():
     root.after(proposalWaitTime, periodicProposal)
 
              
-def proposeTask(skipChange = 0, beepThreshold = 0):
+def proposeTask(skipChange = 0):
     global suggestionSkips, undecidedTasks
     if waitingForResolution: return
-    determineMainTask()     
+    determineFocusTasks()     
     suggestionSkips += skipChange
     if suggestionSkips < 0: suggestionSkips = 0
     found = False
@@ -131,7 +132,7 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
         for fight in rows:
             if fight[0] in undecidedTasks or isComplete(fight[0]):
                 continue
-            elif not isComplete(mainTask) and not mainTask in undecidedTasks and fight[0] != mainTask:
+            elif any([not isComplete(x) for x in focusTasks]) and not fight[0] in undecidedTasks and not fight[0] in focusTasks:
                 continue
             elif skipsLeft > 0:
                 skipsLeft -= 1
@@ -139,24 +140,39 @@ def proposeTask(skipChange = 0, beepThreshold = 0):
             else:
                 found = True
                 rescheduleFight(fight[0], fight[1], fight[2])(None)
-                if days * 24 * 60 * 60 <= beepThreshold:
+                if fight[0] in focusTasks:
                     playAudio(soundFiles[0])
                 break
     if days > maxDays:
         suggestionSkips -= 1
         
-def determineMainTask():
-    global mainTask
+def determineFocusTasks(reset=False):
+    global focusTasks
     endDate = time.time()
     startingDate = endDate -  pastshown
     cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate])
     tasks = [x[0] for x in cur.fetchall()]
     scores = map(lambda tid:getScore(tid, startingDate, endDate), tasks)
+    if reset: focusTasks = []
     maxScore = 0
     for i in range(len(scores)):
-        if scores[i] > maxScore and scores[i] < 0.99: 
+        if scores[i] > 0.90 and scores[i] < 0.99: 
+            focusTasks.append(tasks[i])
+        if scores[i] > maxScore: 
             maxScore = scores[i]
-            mainTask = tasks[i]
+            maxTask = tasks[i]
+    if len(focusTasks) == 0:
+        focusTasks.append(maxTask)
+            
+def toggleFocusTask(tid):
+    def toggleFocusTask_inner(_):
+        global focusTasks
+        if tid in focusTasks:
+            focusTasks.remove(tid)
+        else:
+            focusTasks.append(tid)
+        root.after(1, reloadMain)
+    return toggleFocusTask_inner
     
     
 def rescheduleFight(tid, timestamp, deadline, reloadAfter=False):
@@ -229,24 +245,20 @@ def showTasks():
                 foregroundColour = 'black'
                 if completed: foregroundColour = 'dark red' 
                 elif running: foregroundColour = 'dark green'
-                if tid==mainTask: 
+                if tid in focusTasks: 
                     taskLabel = Label(taskFrame, text=getTaskName(tid), fg=foregroundColour, bg='white')
                 else:
                     taskLabel = Label(taskFrame, text=getTaskName(tid), fg=foregroundColour)
-                scoreCanvas = getScoreCanvas(taskFrame, tid)
-                #dateLabel = Label(taskFrame, text = getDateString(getCompletionExpirationDate(tid)) if completed else '', fg='dark red')               
+                scoreCanvas = getScoreCanvas(taskFrame, tid)               
                 cur.execute("SELECT startTime, endTime FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC LIMIT 1", [tid])                       
                 lastFight = cur.fetchall()[0]
                 taskLabel.bind('<Button-1>', rescheduleFight(tid, lastFight[0], lastFight[1], True))
                 scoreCanvas.bind('<Button-1>', showHistory(tid))
-                #dateLabel.bind('<Button-1>', showHistory(tid))
                 taskLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
-                scoreCanvas.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
-                #dateLabel.bind('<Triple-Button-2>', resolveFight(tid, lastFight[0], lastFight[1], -1))
+                taskLabel.bind('<Triple-Button-3>', toggleFocusTask(tid))
                 taskLabel.pack(side=LEFT)
                 if completed:
                     scoreCanvas.pack(side=LEFT)
-                #dateLabel.pack(side=LEFT)
                 taskFrame.pack()   
     return showTasks_inner
 
@@ -385,7 +397,7 @@ def getScoreCanvas(parent, tid, plusone = False, extraspace = 0):
     startingDate = time.time() - pastshown
     nowDate = time.time()
     score = getScore(tid, startingDate, nowDate, plusone)
-    #print getTaskName(tid), int(100*score), '%'
+    #print getTaskName(tid), str(int(100*score))+'%'
     scoreCanvas = Canvas(parent, width=10+extraspace, height=10, borderwidth=0, highlightthickness=0)
     scoreCanvas.create_rectangle(0, 10, 10, 0, width = 0, fill='gray60')
     scoreCanvas.create_rectangle(0, 10, 10*score, 0, width = 2 if score>=0.99 else 0, fill='red')

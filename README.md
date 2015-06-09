@@ -10,7 +10,8 @@ Recent Tasks
 =======
 * Currently running tasks show in green font.
 * Tasks on cooldown show in red font.
-* The main task shows with a white background.
+* The tasks that should be focused on show with a white background.
+* Triple right-click on a task to add it or remove it from the tasks that should be focused.
 * Click on a task to re-schedule its last successful pledge in the Text Field.
 * Triple middle-click on a task to delete the last successful pledge of this task.
 * A square will appear next to tasks on cooldown, indicating the task's overall score.
