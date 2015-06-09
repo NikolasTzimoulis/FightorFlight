@@ -35,7 +35,7 @@ lastSuggestion = None
 quickInfoReset = None
 nextMainReload = None
 nextLevelUpdate = None
-focusTasks = []
+focusTasks = set([])
 
 def addNewTask(_):
     global pastshown
@@ -118,6 +118,8 @@ def proposeTask(skipChange = 0):
     global suggestionSkips, undecidedTasks
     if waitingForResolution: return
     determineFocusTasks()     
+    focusTasksToSuggest = filter(lambda x: not isComplete(x), focusTasks)
+    focusTasksToSuggest = filter(lambda x: x not in undecidedTasks, focusTasksToSuggest)
     suggestionSkips += skipChange
     if suggestionSkips < 0: suggestionSkips = 0
     found = False
@@ -132,7 +134,7 @@ def proposeTask(skipChange = 0):
         for fight in rows:
             if fight[0] in undecidedTasks or isComplete(fight[0]):
                 continue
-            elif any([not isComplete(x) for x in focusTasks]) and not fight[0] in undecidedTasks and not fight[0] in focusTasks:
+            elif len(focusTasksToSuggest)>0 and fight[0] not in focusTasksToSuggest:
                 continue
             elif skipsLeft > 0:
                 skipsLeft -= 1
@@ -153,16 +155,16 @@ def determineFocusTasks(reset=False):
     cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate])
     tasks = [x[0] for x in cur.fetchall()]
     scores = map(lambda tid:getScore(tid, startingDate, endDate), tasks)
-    if reset: focusTasks = []
+    if reset: focusTasks = set([])
     maxScore = 0
     for i in range(len(scores)):
         if scores[i] > 0.90 and scores[i] < 0.99: 
-            focusTasks.append(tasks[i])
+            focusTasks.add(tasks[i])
         if scores[i] > maxScore: 
             maxScore = scores[i]
             maxTask = tasks[i]
     if len(focusTasks) == 0:
-        focusTasks.append(maxTask)
+        focusTasks.add(maxTask)
             
 def toggleFocusTask(tid):
     def toggleFocusTask_inner(_):
@@ -170,7 +172,7 @@ def toggleFocusTask(tid):
         if tid in focusTasks:
             focusTasks.remove(tid)
         else:
-            focusTasks.append(tid)
+            focusTasks.add(tid)
         root.after(1, reloadMain)
     return toggleFocusTask_inner
     
