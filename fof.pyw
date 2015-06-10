@@ -110,14 +110,16 @@ def getCompletionTime(peek=False, timeEnd=time.time()):
 def periodicProposal():
     global suggestionSkips, proposalWaitTime, undecidedTasks
     suggestionSkips = -1
-    proposeTask()
+    determineFocusTasks()
+    if not waitingForResolution: 
+        proposeTask()    
+    else:
+        playAudio(soundFiles[0])    
     root.after(proposalWaitTime, periodicProposal)
 
              
 def proposeTask(skipChange = 0):
     global suggestionSkips, undecidedTasks
-    if waitingForResolution: return
-    determineFocusTasks()     
     focusTasksToSuggest = filter(lambda x: not isComplete(x), focusTasks)
     focusTasksToSuggest = filter(lambda x: x not in undecidedTasks, focusTasksToSuggest)
     suggestionSkips += skipChange
@@ -160,7 +162,7 @@ def determineFocusTasks(reset=False):
     for i in range(len(scores)):
         if scores[i] > 0.90 and scores[i] < 0.99: 
             focusTasks.add(tasks[i])
-        if scores[i] > maxScore: 
+        if scores[i] > maxScore and scores[i] < 0.99: 
             maxScore = scores[i]
             maxTask = tasks[i]
     if len(focusTasks) == 0:
@@ -234,7 +236,6 @@ def showLevelHistory():
 
 def showTasks():
     def showTasks_inner(_):
-        if waitingForResolution: return
         startingDate = time.time() -  pastshown
         cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [startingDate])
         tasks = [x[0] for x in cur.fetchall()]
@@ -465,10 +466,11 @@ def reloadMain():
     e = Entry(entryFrame, textvariable=entryText)
     e.pack()
     e.focus_set()
-    e.bind('<Return>', addNewTask) 
-    e.bind('<Down>', lambda _: proposeTask(skipChange=1))
-    e.bind('<Up>', lambda _: proposeTask(skipChange=-1))
-    e.bind('<Button-3>', showTasks())
+    if not waitingForResolution:
+        e.bind('<Return>', addNewTask) 
+        e.bind('<Down>', lambda _: proposeTask(skipChange=1))
+        e.bind('<Up>', lambda _: proposeTask(skipChange=-1))
+        e.bind('<Button-3>', showTasks())
     quickInfo = Label(entryFrame, textvariable=quickInfoText)
     quickInfo.pack(side=RIGHT)
     entryFrame.pack()
