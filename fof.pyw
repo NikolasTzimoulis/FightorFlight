@@ -400,10 +400,12 @@ def getScoreCanvas(parent, tid, plusone = False, extraspace = 0):
     startingDate = time.time() - pastshown
     nowDate = time.time()
     score = getScore(tid, startingDate, nowDate, plusone)
+    if score >=0.99: score = 1.0
     #print getTaskName(tid), str(int(100*score))+'%'
-    scoreCanvas = Canvas(parent, width=10+extraspace, height=10, borderwidth=0, highlightthickness=0)
-    scoreCanvas.create_rectangle(0, 10, 10, 0, width = 0, fill='gray60')
-    scoreCanvas.create_rectangle(0, 10, 10*score, 0, width = 2 if score>=0.99 else 0, fill='red')
+    scoreCanvas = Canvas(parent, width=10+extraspace, height=10, borderwidth=0, highlightthickness=0) 
+    borderWidth = 2 if score==1 else 0
+    scoreCanvas.create_rectangle(0, 10, 10*score, 0, width = borderWidth, fill='red')
+    scoreCanvas.create_rectangle(10*score, 10, 10, 0, width = 0, fill='gray60')    
     return scoreCanvas
           
 def playAudio(filename):
