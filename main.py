@@ -64,7 +64,7 @@ def unComplete(tid):
         deadline = cur.fetchall()[0][0]
         cur.execute("UPDATE Fights SET value = ? WHERE taskId = ? AND endTime =  ?", [time.time() - deadline, tid, deadline])
         
-def getScore(tid, start=time.time()-pastshown, end=time.time(), plusone = False):
+def getScore(tid, start, end, plusone = False):
     if not plusone:
         cur.execute("SELECT startTime, endTime, value FROM Fights WHERE taskID = ? AND value > 0 AND endTime+value >= ? AND startTime <= ?", [tid, start, end])
     else:
@@ -82,6 +82,9 @@ def getScore(tid, start=time.time()-pastshown, end=time.time(), plusone = False)
     if score == (actualEnd-actualStart): return 1.0
     return score/(actualEnd-actualStart)
 
+def getScoreText(score, plusone=False):
+    return str((10 if plusone else 0) + 10*int(10*score))+"%"
+
 def playAudio(filename):
     sound = SoundLoader.load(filename)
     if sound: sound.play()
@@ -98,7 +101,6 @@ class MainScreen(BoxLayout):
         self.showCompletedTasks = False
         cur.execute("SELECT taskId, startTime, endTime FROM Fights WHERE value = 0")
         rows = cur.fetchall()
-        undecidedTasks = map(lambda x: x[0], rows)
         rows.sort(key = lambda x: x[2], reverse = False)
         timeLeftList = []
         self.progressbars = []
@@ -108,7 +110,7 @@ class MainScreen(BoxLayout):
             self.add_widget(taskLayout)
             timeLeft = deadline - time.time()
             if timeLeft > 0:
-                taskLabel = Label(text=getTaskName(tid))
+                taskLabel = Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center')
                 taskLayout.add_widget(taskLabel)
                 taskProgress = ProgressBar(max=deadline-timestamp)
                 self.progressbars.append(taskProgress)
@@ -119,7 +121,7 @@ class MainScreen(BoxLayout):
                     timeLeftList.append(timeLeft)
             else:
                 if timeLeft > -1: playAudio(soundFiles[1])    
-                taskLabel = Label(text=getTaskName(tid))
+                taskLabel = Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center')
                 taskLayout.add_widget(taskLabel)
                 fightButton = Button(background_color=(1,0,0,1))
                 fightButton.bind(on_press=self.getCompletionTime(tid, timestamp, deadline))
@@ -140,18 +142,28 @@ class MainScreen(BoxLayout):
         if len(timeLeftList) > 0:
             if MainScreen.nextReload is not None: Clock.unschedule(lambda td:self.__init__())
             MainScreen.nextReload = Clock.schedule_once(lambda td:self.__init__(), min(timeLeftList))
+    
+    def incrementProgressBars(self, dt): 
+        for pb in self.progressbars:
+            pb.value+=1
             
     def addNewTaskPopup(self, defaultTask = None, defaultDuration = 1):
         def addNewTaskPopup_inner(_,__=None):
             popupLayout = BoxLayout(orientation='horizontal')
             taskDropdownIncomplete = DropDown()
             taskDropdownComplete =  DropDown()
+            popup = Popup(title='',
+            content=popupLayout,
+            size_hint=(None, None), size=(800, 200))
             cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0")
             tasks = [x[0] for x in cur.fetchall()]
             firstTask = defaultTask
-            for tid in sorted(tasks, key=lambda x:getScore(x), reverse=True):
+            for tid in sorted(tasks, key=lambda x:getScore(x, time.time()-pastshown, time.time()), reverse=True):
                 if isRunning(tid): continue
-                btn = Button(text=getTaskName(tid), size_hint_y=None, width = 200, height=44)
+                score = getScore(tid, time.time()-pastshown, time.time())
+                scoreColor = (1,1-score,1-score,1)
+                #print getTaskName(tid), score
+                btn = Button(text=getTaskName(tid), bold=score>=0.99, color = scoreColor, background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
                 if not isComplete(tid):
                     if firstTask is None and not self.showCompletedTasks: firstTask = tid
                     curTaskDropDown = taskDropdownIncomplete
@@ -160,7 +172,7 @@ class MainScreen(BoxLayout):
                     curTaskDropDown = taskDropdownComplete
                 btn.bind(on_release=lambda btn: curTaskDropDown.select(btn.text))
                 curTaskDropDown.add_widget(btn)
-            taskSelector = Button(text=getTaskName(firstTask), width = 200, height=50, size_hint=(None, None))
+            taskSelector = Button(text=getTaskName(firstTask), text_size=(200, 100), valign = 'middle', halign='center')
             if self.showCompletedTasks:
                 taskSelector.bind(on_release=taskDropdownComplete.open)
             else:
@@ -168,21 +180,21 @@ class MainScreen(BoxLayout):
             taskDropdownIncomplete.bind(on_select=lambda instance, x: setattr(taskSelector, 'text', x))
             popupLayout.add_widget(taskSelector)
             durationInput = TextInput(text=str(defaultDuration), input_filter='int')
-            durationInput.bind(on_triple_tap=self.changeTaskType)
+            durationInput.bind(on_triple_tap=self.changeTaskType(popup))
             popupLayout.add_widget(durationInput)
             addButton = Button(text='+', font_size=100, background_color=(0.2,0.7,1,1))
             popupLayout.add_widget(addButton)
-            popup = Popup(title='',
-            content=popupLayout,
-            size_hint=(None, None), size=(800, 200))
             addButton.bind(on_press=self.addNewTask(taskSelector, durationInput, popup))
             popup.open()  
         return addNewTaskPopup_inner
     
-    def changeTaskType(self, _):
-        if self.showCompletedTasks: self.showCompletedTasks = False
-        else: self.showCompletedTasks = True       
-        playAudio(soundFiles[0]) 
+    def changeTaskType(self, popup=None):
+        def changeTaskType_inner(_=None):
+            if self.showCompletedTasks: self.showCompletedTasks = False
+            else: self.showCompletedTasks = True       
+            playAudio(soundFiles[0]) 
+            if popup is not None: popup.dismiss()
+        return changeTaskType_inner
         
     def addNewTask(self, taskSelector, durationInput, popup=None):
         def addNewTask_inner(_=None):
@@ -195,28 +207,6 @@ class MainScreen(BoxLayout):
             con.commit() 
             Clock.schedule_once(lambda td:self.__init__())
         return addNewTask_inner
-            
-    def resolveFight(self, task_id, timeStart, timeEnd, success, completionTimeInput=None, popup=None):
-        def resolveFight_inner(_=None):
-            global waitingForResolution
-            if popup is not None: popup.dismiss()
-            if success >= 0:
-                if success == 0: 
-                    completionTime = 1
-                    deadline = time.time()
-                    cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [deadline, task_id, timeStart, timeEnd])
-                else:
-                    deadline = timeEnd
-                completionTime = completionTime=60*60*int(completionTimeInput.text)
-                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
-                con.commit()     
-                playAudio(soundFiles[3])
-            elif success == -1:
-                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])  
-                playAudio(soundFiles[2])
-            con.commit()
-            Clock.schedule_once(lambda td:self.__init__())
-        return resolveFight_inner       
     
     def getCompletionTime(self, tid, timestamp, deadline, timeEnd=time.time()):
         def getCompletionTime_inner(_=None):
@@ -231,12 +221,72 @@ class MainScreen(BoxLayout):
             fightButton.bind(on_press=self.resolveFight(tid, timestamp, deadline, 1, completionTimeInput, popup))
             popup.open()  
         return getCompletionTime_inner
-
-                    
-    def incrementProgressBars(self, dt): 
-        for pb in self.progressbars:
-            pb.value+=1
+            
+    def resolveFight(self, task_id, timeStart, timeEnd, success, completionTimeInput=None, popup=None):
+        def resolveFight_inner(_=None):
+            global waitingForResolution
+            if popup is not None: popup.dismiss()
+            oldScore = getScore(task_id, time.time()-pastshown, time.time())
+            if success >= 0:
+                if success == 0: 
+                    completionTime = 1
+                    deadline = time.time()
+                    cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [deadline, task_id, timeStart, timeEnd])
+                else:
+                    deadline = timeEnd
+                completionTime = completionTime=60*60*int(completionTimeInput.text)
+                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
+                con.commit()     
+            elif success == -1:
+                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])  
+                playAudio(soundFiles[2])
+            con.commit()
+            self.makeScoreProgressPopup(task_id, oldScore)
+            Clock.schedule_once(lambda td:self.__init__())
+        return resolveFight_inner       
     
+    def makeScoreProgressPopup(self, tid, oldScore):
+            newScore = getScore(tid, time.time()-pastshown, time.time())
+            #print oldScore, '->', newScore
+            scoreLayout = BoxLayout(orientation='vertical')
+            scoreLayout.add_widget(Label(text=getTaskName(tid), text_size=(250, 200), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100))
+            progressLayout = BoxLayout(orientation='horizontal')
+            prevScoreMilestone = Label(text=getScoreText(oldScore))
+            prevScoreMilestone.color = (1,1-float(prevScoreMilestone.text[:-1])/100,1-float(prevScoreMilestone.text[:-1])/100,1)
+            progressLayout.add_widget(prevScoreMilestone)
+            scoreProgress = ProgressBar(max=0.1)
+            progressLayout.add_widget(scoreProgress)
+            nextScoreMilestone = Label(text=getScoreText(oldScore, True))
+            nextScoreMilestone.color = (1,1-float(nextScoreMilestone.text[:-1])/100,1-float(nextScoreMilestone.text[:-1])/100,1)
+            nextScoreMilestone.bold = nextScoreMilestone.text == '100%'
+            progressLayout.add_widget(nextScoreMilestone)
+            scoreLayout.add_widget(progressLayout)            
+            scorePopup = Popup(title='',
+            content=scoreLayout,
+            size_hint=(None, None), size=(250, 200))
+            scorePopup.open()  
+            Clock.schedule_once(scorePopup.dismiss, 5)
+            Clock.schedule_interval(self.incrementScoreProgress(scoreProgress, prevScoreMilestone, nextScoreMilestone, oldScore, newScore), 0.1)
+            
+    def incrementScoreProgress(self, scoreProgress, prevScoreMilestone, nextScoreMilestone, oldScore, newScore):              
+        def incrementScoreProgress_inner(_=None):
+            if getScoreText(newScore) == prevScoreMilestone.text and scoreProgress.value >= newScore % 0.1:
+                Clock.unschedule(self.incrementScoreProgress)    
+            else: 
+                if getScoreText(newScore) == prevScoreMilestone.text and newScore % 0.1 - scoreProgress.value <= 0.02:
+                    scoreProgress.value = newScore % 0.1
+                else:
+                    scoreProgress.value += 0.02
+                if scoreProgress.value >= scoreProgress.max:
+                    playAudio(soundFiles[3])
+                    if not nextScoreMilestone.text == '100%':
+                        scoreProgress.value = 0
+                        prevScoreMilestone.text = str(10+int(prevScoreMilestone.text[:-1]))+'%'
+                        prevScoreMilestone.color = (1,1-float(prevScoreMilestone.text[:-1])/100,1-float(prevScoreMilestone.text[:-1])/100,1)
+                        nextScoreMilestone.text = str(10+int(nextScoreMilestone.text[:-1]))+'%'
+                        nextScoreMilestone.color = (1,1-float(nextScoreMilestone.text[:-1])/100,1-float(nextScoreMilestone.text[:-1])/100,1)
+                        nextScoreMilestone.bold = nextScoreMilestone.text == '100%'
+        return incrementScoreProgress_inner   
 
 class FoFApp(App):
 
