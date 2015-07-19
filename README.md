@@ -8,9 +8,9 @@
 * Press the grey button if the pledge was a failure.
 
 ###New Pledge Screen
-* Use the dropdown menu on the left to change the task. Enter the desired running time (in minutes) on the text field on the middle. Finally press the **+** button to start the pledge. 
-* The dropdown menu is populated with active recent tasks that are not currently on cooldown. 
-* Select the **...*** item on the dropdown menu to open a second dropdown menu that will be populated with all the rest of the tasks. 
+* Use the dropdown menu on the left to change the task. Enter the desired running time (in minutes) on the text field on the middle. Finally press the blue **+** button on the right to start the pledge. 
+* The dropdown menu is populated with recently active tasks that are not currently on cooldown. 
+* Select the **...** item on the dropdown menu to open a second dropdown menu that will be populated with all the remaining tasks. 
 * Select the blue **+** item on the second dropdown menu to create a new task. Enter the name of the task in the text field that will appear and tap anywhere outside the text field to save the name.
 
 -----
