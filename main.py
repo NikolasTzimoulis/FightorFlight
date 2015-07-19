@@ -204,19 +204,21 @@ class MainScreen(BoxLayout):
         
     def addNewTask(self, taskSelector, durationInput, popup=None):
         def addNewTask_inner(_=None):
-            if popup is not None: popup.dismiss()
-            try:
-                tid = getTaskId(taskSelector.text)
-            except:
-                cur.execute("INSERT INTO Tasks(name) VALUES(?)", [taskSelector.text])
-                con.commit()
-                tid = getTaskId(taskSelector.text)
-            duration = 60*int(durationInput.text)
-            cur.execute("UPDATE Fights SET value=-1 WHERE taskId=? AND value = 0 AND startTime <= ?;", [tid, time.time()])
-            unComplete(tid)
-            cur.execute("INSERT INTO Fights VALUES(?, ?, ?, ?)", [time.time(), time.time()+duration, 0, tid])
-            con.commit() 
-            Clock.schedule_once(lambda td:self.__init__())
+            if not taskSelector.text == '':
+                if popup is not None: 
+                    popup.dismiss()
+                try:
+                    tid = getTaskId(taskSelector.text)
+                except:
+                    cur.execute("INSERT INTO Tasks(name) VALUES(?)", [taskSelector.text])
+                    con.commit()
+                    tid = getTaskId(taskSelector.text)
+                duration = 60*int(durationInput.text)
+                cur.execute("UPDATE Fights SET value=-1 WHERE taskId=? AND value = 0 AND startTime <= ?;", [tid, time.time()])
+                unComplete(tid)
+                cur.execute("INSERT INTO Fights VALUES(?, ?, ?, ?)", [time.time(), time.time()+duration, 0, tid])
+                con.commit() 
+                Clock.schedule_once(lambda td:self.__init__())
         return addNewTask_inner
     
     def getCompletionTime(self, tid, timestamp, deadline, timeEnd=time.time()):
