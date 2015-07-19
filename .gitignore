@@ -1,6 +1,7 @@
 .project
 .pydevproject
 *.png
+*.svg
 *.wav
 *.db
 analytics.txt

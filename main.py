@@ -37,7 +37,10 @@ def getTaskName(tid):
     return cur.fetchall()[0][0]
 
 def getTaskId(tname):
-    cur.execute("SELECT id FROM Tasks WHERE name = ?", [tname])
+    try:
+        cur.execute("SELECT id FROM Tasks WHERE name = ?", [tname])
+    except:
+        cur.execute("SELECT id FROM Tasks WHERE name = ?", [tname.decode('utf-8')])        
     return cur.fetchall()[0][0]
 
 def getCompletionExpirationDate(tid, timeback=0):
@@ -90,7 +93,6 @@ def playAudio(filename):
     sound = SoundLoader.load(filename)
     if sound: sound.play()
     
-
 class MainScreen(BoxLayout):
     
     nextReload = None
@@ -132,7 +134,7 @@ class MainScreen(BoxLayout):
                 enableNewTask = False
                 break
         if enableNewTask:
-            newTaskButton = Button(text='+', font_size=100, background_color=(0.2,0.7,1,1))
+            newTaskButton = Button(text='+', font_size='100sp', background_color=(0.2,0.7,1,1))
             newTaskButton.bind(on_press=self.addNewTaskPopup())
             self.add_widget(newTaskButton)
                         
@@ -172,8 +174,8 @@ class MainScreen(BoxLayout):
                 else:
                     btn.bind(on_release=lambda btn: moreTaskDropdown.select(btn.text))
                     moreTaskDropdown.add_widget(btn)                
-            moreTasksButton = Button(text='...', bold=True, background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
-            writeTaskButton = Button(text='+', font_size=40, bold=True, color=(0.2,0.7,1,1), background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            moreTasksButton = Button(text='...', font_size='40sp', bold=True, background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            writeTaskButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             tasksDropdown.add_widget(moreTasksButton)
             moreTaskDropdown.add_widget(writeTaskButton)
             taskSelector = Button(text=getTaskName(firstTask), text_size=(200, 100), valign = 'middle', halign='center')
@@ -190,7 +192,7 @@ class MainScreen(BoxLayout):
             popupLayout.add_widget(taskSelector)
             durationInput = TextInput(text=str(defaultDuration), input_filter='int')
             popupLayout.add_widget(durationInput)
-            addButton = Button(text='+', font_size=100, background_color=(0.2,0.7,1,1))
+            addButton = Button(text='+', font_size='70sp', background_color=(0.2,0.7,1,1))
             popupLayout.add_widget(addButton)
             addButton.bind(on_press=self.addNewTask(taskSelector, durationInput, popup))
             popup.open()  
@@ -209,8 +211,11 @@ class MainScreen(BoxLayout):
                     popup.dismiss()
                 try:
                     tid = getTaskId(taskSelector.text)
-                except:
-                    cur.execute("INSERT INTO Tasks(name) VALUES(?)", [taskSelector.text])
+                except:     
+                    try:               
+                        cur.execute("INSERT INTO Tasks(name) VALUES(?)", [taskSelector.text.strip()])
+                    except:
+                        cur.execute("INSERT INTO Tasks(name) VALUES(?)", [taskSelector.text.strip().decode('utf-8')])
                     con.commit()
                     tid = getTaskId(taskSelector.text)
                 duration = 60*int(durationInput.text)
