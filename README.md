@@ -27,7 +27,7 @@ Pledge Progressbar
 Fight or Flight Buttons
 =======
 * Click on the check mark if the pledge was successful. The task will go on cooldown.
-* Before clicking the check mark, type a <time> in the Text Field to change the cooldown duration.
+* Before clicking the check mark, type a **time** in the Text Field to change the cooldown duration.
 * Click on the x mark if the pledge was not succesful.
 * Next to the buttons, you can see a square indicating the task's overall score for the past time window.
 * Click on the square to get a successful pledges chart for the past time window.
