@@ -249,7 +249,7 @@ class MainScreen(BoxLayout):
             newScore = getScore(tid, time.time()-pastshown, time.time())
             #print oldScore, '->', newScore
             scoreLayout = BoxLayout(orientation='vertical')
-            scoreLayout.add_widget(Label(text=getTaskName(tid), text_size=(250, 200), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100))
+            scoreLayout.add_widget(Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100))
             progressLayout = BoxLayout(orientation='horizontal')
             prevScoreMilestone = Label(text=getScoreText(oldScore))
             prevScoreMilestone.color = (1,1-float(prevScoreMilestone.text[:-1])/100,1-float(prevScoreMilestone.text[:-1])/100,1)
@@ -263,7 +263,7 @@ class MainScreen(BoxLayout):
             scoreLayout.add_widget(progressLayout)            
             scorePopup = Popup(title='',
             content=scoreLayout,
-            size_hint=(None, None), size=(250, 200))
+            size_hint=(None, None), size=(400, 300))
             scorePopup.open()  
             Clock.schedule_once(scorePopup.dismiss, 5)
             Clock.schedule_interval(self.incrementScoreProgress(scoreProgress, prevScoreMilestone, nextScoreMilestone, oldScore, newScore), 0.1)
@@ -278,7 +278,12 @@ class MainScreen(BoxLayout):
                 else:
                     scoreProgress.value += 0.02
                 if scoreProgress.value >= scoreProgress.max:
-                    playAudio(soundFiles[3])
+                    if nextScoreMilestone.text == '100%':
+                        playAudio(soundFiles[5])
+                    elif nextScoreMilestone.text == '90%':
+                        playAudio(soundFiles[4])
+                    else:
+                        playAudio(soundFiles[3])
                     if not nextScoreMilestone.text == '100%':
                         scoreProgress.value = 0
                         prevScoreMilestone.text = str(10+int(prevScoreMilestone.text[:-1]))+'%'
