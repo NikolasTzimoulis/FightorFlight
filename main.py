@@ -173,7 +173,7 @@ class MainScreen(BoxLayout):
                     btn.bind(on_release=lambda btn: moreTaskDropdown.select(btn.text))
                     moreTaskDropdown.add_widget(btn)                
             moreTasksButton = Button(text='...', bold=True, background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
-            writeTaskButton = Button(text='+', font_size=30, bold=True, color=(0.2,0.7,1,1), background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            writeTaskButton = Button(text='+', font_size=40, bold=True, color=(0.2,0.7,1,1), background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             tasksDropdown.add_widget(moreTasksButton)
             moreTaskDropdown.add_widget(writeTaskButton)
             taskSelector = Button(text=getTaskName(firstTask), text_size=(200, 100), valign = 'middle', halign='center')
