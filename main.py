@@ -307,26 +307,28 @@ class MainScreen(BoxLayout):
     def resolveFight(self, task_id, timeStart, timeEnd, success, completionTimeSelector=None, popup=None):
         def resolveFight_inner(_=None):
             global waitingForResolution
-            if completionTimeSelector is not None and not completionTimeSelector.text == '' and  int(completionTimeSelector.text) > 0:
-                if popup is not None: popup.dismiss()
-                oldScore = getScore(task_id, time.time()-pastshown, time.time())
-                if success >= 0:
-                    if success == 0: 
-                        completionTime = 1
-                        deadline = time.time()
-                        cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [deadline, task_id, timeStart, timeEnd])
-                    else:
-                        deadline = timeEnd
-                    completionTime = completionTime=60*60*int(completionTimeSelector.text)
-                    cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
-                    con.commit()
-                    self.makeScoreProgressPopup(task_id, oldScore)     
-                elif success == -1:
-                    cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])  
-                    playAudio(soundFiles[2])
-                    Clock.schedule_once(self.addNewTaskPopup(task_id, int((timeEnd-timeStart)/60)),1)
+            if popup is not None: popup.dismiss()
+            oldScore = getScore(task_id, time.time()-pastshown, time.time())
+            if success >= 0:
+                if success == 0: 
+                    completionTime = 1
+                    deadline = time.time()
+                    cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [deadline, task_id, timeStart, timeEnd])
+                else:
+                    deadline = timeEnd
+                try:
+                    completionTime = 60*60*int(completionTimeSelector.text)+1
+                except:
+                    completionTime = 1
+                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
                 con.commit()
-                Clock.schedule_once(lambda td:self.__init__())
+                self.makeScoreProgressPopup(task_id, oldScore)     
+            elif success == -1:
+                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])  
+                playAudio(soundFiles[2])
+                Clock.schedule_once(self.addNewTaskPopup(task_id, int((timeEnd-timeStart)/60)),1)
+            con.commit()
+            Clock.schedule_once(lambda td:self.__init__())
         return resolveFight_inner       
     
     def makeScoreProgressPopup(self, tid, oldScore):
