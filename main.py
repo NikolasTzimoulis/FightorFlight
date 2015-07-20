@@ -365,7 +365,7 @@ class MainScreen(BoxLayout):
                     scoreProgress.value = newScore % 0.1
                 else:
                     scoreProgress.value += 0.02
-                if scoreProgress.value >= scoreProgress.max:
+                if scoreProgress.value >= 0.99*scoreProgress.max:
                     if nextScoreMilestone.text == '100%':
                         playAudio(soundFiles[5])
                     elif nextScoreMilestone.text == '90%':
