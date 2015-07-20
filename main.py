@@ -63,9 +63,10 @@ def isRunning(tid):
 
 def unComplete(tid):
     if isComplete(tid):
-        cur.execute("SELECT endTime FROM Fights WHERE taskId = ? ORDER BY endTime DESC LIMIT 1", [tid])        
+        cur.execute("SELECT endTime FROM Fights WHERE value > 0 AND taskId = ? ORDER BY endTime DESC LIMIT 1", [tid])        
         deadline = cur.fetchall()[0][0]
         cur.execute("UPDATE Fights SET value = ? WHERE taskId = ? AND endTime =  ?", [time.time() - deadline, tid, deadline])
+        con.commit()
         
 def getScore(tid, start, end, plusone = False): # do NOT a default values for start and end!
     if not plusone:
@@ -224,7 +225,7 @@ class MainScreen(BoxLayout):
         durations = [ x for x in durations if not (x in seen or seen.add(x))]
         self.durationDropdown = DropDown()
         firstDuration = None
-        for d in durations:
+        for d in durations[:10]:
             if firstDuration is None: firstDuration = d
             btn = Button(text=d, text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             btn.bind(on_release=lambda btn: self.durationDropdown.select(btn.text))
@@ -279,7 +280,7 @@ class MainScreen(BoxLayout):
             seen = set()
             values = [ x for x in values if not (x in seen or seen.add(x))]
             firstValue = None
-            for v in values:
+            for v in values[:10]:
                 if firstValue is None: firstValue = v
                 btn = Button(text=v, text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
                 btn.bind(on_release=lambda btn: completionTimeDropdown.select(btn.text))

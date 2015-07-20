@@ -4,14 +4,15 @@
 * On the bottom half of the screen you can press the blue **+** button and you will be taken to the **New Pledge Screen**.
 
 ###Fight or Flight Screen
-* Press the red button if the pledge was successful. Enter the desired cooldown time (in hours) for the task and press the red button next to the text field. Your progress with the task will be briefly shown.
+* Press the red button if the pledge was successful. Select the desired cooldown time (in hours) for the task from the dropdown menu and press the red button next to it to cofirm. Your progress with the task will be briefly shown.
+* You can enter a custom cooldown by using the blue **+** item on the dropdown menu. Enter the cooldown time in the text field that will appear and tap anywhere outside the text field to save.
 * Press the grey button if the pledge was a failure.
 
 ###New Pledge Screen
-* Use the dropdown menu on the left to change the task. Enter the desired running time (in minutes) on the text field on the middle. Finally press the blue **+** button on the right to start the pledge. 
-* The dropdown menu is populated with recently active tasks that are not currently on cooldown. 
-* Select the **...** item on the dropdown menu to open a second dropdown menu that will be populated with all the remaining tasks. 
-* Select the blue **+** item on the second dropdown menu to create a new task. Enter the name of the task in the text field that will appear and tap anywhere outside the text field to save the name.
+* Use the dropdown menu on the left to change the task. Select the desired running time (in minutes) on the dropdown menu in the middle. Finally press the blue **+** button on the right to start the pledge. 
+* The task dropdown menu is populated with recently active tasks that are not currently on cooldown. Select the **...** item on the task dropdown menu to open an extension dropdown menu that will be populated with all the remaining tasks. 
+* You can create a new task by using the blue **+** item on the extension dropdown menu. Enter the name of the new task in the text field that will appear and tap anywhere outside the text field to save.
+* You can enter a custom running time by using the blue **+** item on the running time dropdown menu. Enter the running time in the text field that will appear and tap anywhere outside the text field to save.
 
 -----
 # Tkinter

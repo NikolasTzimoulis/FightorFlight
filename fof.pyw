@@ -323,7 +323,7 @@ def isRunning(tid):
 
 def unComplete(tid):
     if isComplete(tid):
-        cur.execute("SELECT endTime FROM Fights WHERE taskId = ? ORDER BY endTime DESC LIMIT 1", [tid])        
+        cur.execute("SELECT endTime FROM Fights WHERE value > 0 AND taskId = ? ORDER BY endTime DESC LIMIT 1", [tid])
         deadline = cur.fetchall()[0][0]
         cur.execute("UPDATE Fights SET value = ? WHERE taskId = ? AND endTime =  ?", [time.time() - deadline, tid, deadline])
         
