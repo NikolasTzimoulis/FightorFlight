@@ -335,7 +335,7 @@ class MainScreen(BoxLayout):
     
     def makeScoreProgressPopup(self, tid, oldScore):
             newScore = getScore(tid, time.time()-pastshown, time.time())
-            #print oldScore, '->', newScore
+            print oldScore, '->', newScore
             scoreLayout = BoxLayout(orientation='vertical')
             scoreLayout.add_widget(Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100))
             progressLayout = BoxLayout(orientation='horizontal')
@@ -343,6 +343,7 @@ class MainScreen(BoxLayout):
             prevScoreMilestone.color = (1,1-float(prevScoreMilestone.text[:-1])/100,1-float(prevScoreMilestone.text[:-1])/100,1)
             progressLayout.add_widget(prevScoreMilestone)
             scoreProgress = ProgressBar(max=0.1)
+            scoreProgress.value = oldScore % 0.1
             progressLayout.add_widget(scoreProgress)
             nextScoreMilestone = Label(text=getScoreText(oldScore, True))
             nextScoreMilestone.color = (1,1-float(nextScoreMilestone.text[:-1])/100,1-float(nextScoreMilestone.text[:-1])/100,1)
@@ -365,20 +366,19 @@ class MainScreen(BoxLayout):
                     scoreProgress.value = newScore % 0.1
                 else:
                     scoreProgress.value += 0.02
-                if scoreProgress.value >= 0.99*scoreProgress.max:
-                    if nextScoreMilestone.text == '100%':
-                        playAudio(soundFiles[5])
-                    elif nextScoreMilestone.text == '90%':
+                if scoreProgress.value >= 0.99*scoreProgress.max and nextScoreMilestone.text == '100%':
+                    playAudio(soundFiles[5])
+                if scoreProgress.value >= scoreProgress.max and not nextScoreMilestone.text == '100%':
+                    if nextScoreMilestone.text == '90%':
                         playAudio(soundFiles[4])
                     else:
                         playAudio(soundFiles[3])
-                    if not nextScoreMilestone.text == '100%':
-                        scoreProgress.value = 0
-                        prevScoreMilestone.text = str(10+int(prevScoreMilestone.text[:-1]))+'%'
-                        prevScoreMilestone.color = (1,1-float(prevScoreMilestone.text[:-1])/100,1-float(prevScoreMilestone.text[:-1])/100,1)
-                        nextScoreMilestone.text = str(10+int(nextScoreMilestone.text[:-1]))+'%'
-                        nextScoreMilestone.color = (1,1-float(nextScoreMilestone.text[:-1])/100,1-float(nextScoreMilestone.text[:-1])/100,1)
-                        nextScoreMilestone.bold = nextScoreMilestone.text == '100%'
+                    scoreProgress.value = 0
+                    prevScoreMilestone.text = str(10+int(prevScoreMilestone.text[:-1]))+'%'
+                    prevScoreMilestone.color = (1,1-float(prevScoreMilestone.text[:-1])/100,1-float(prevScoreMilestone.text[:-1])/100,1)
+                    nextScoreMilestone.text = str(10+int(nextScoreMilestone.text[:-1]))+'%'
+                    nextScoreMilestone.color = (1,1-float(nextScoreMilestone.text[:-1])/100,1-float(nextScoreMilestone.text[:-1])/100,1)
+                    nextScoreMilestone.bold = nextScoreMilestone.text == '100%'
         return incrementScoreProgress_inner   
 
 class FoFApp(App):
