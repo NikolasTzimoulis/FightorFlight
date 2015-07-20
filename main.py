@@ -335,7 +335,7 @@ class MainScreen(BoxLayout):
     
     def makeScoreProgressPopup(self, tid, oldScore):
             newScore = getScore(tid, time.time()-pastshown, time.time())
-            print oldScore, '->', newScore
+            #print oldScore, '->', newScore
             scoreLayout = BoxLayout(orientation='vertical')
             scoreLayout.add_widget(Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100))
             progressLayout = BoxLayout(orientation='horizontal')
