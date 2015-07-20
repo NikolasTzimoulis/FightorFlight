@@ -149,7 +149,7 @@ class MainScreen(BoxLayout):
         for pb in self.progressbars:
             pb.value+=1
             
-    def addNewTaskPopup(self, defaultTask = None, defaultDuration = 1):
+    def addNewTaskPopup(self, defaultTask = None, defaultDuration = None):
         def addNewTaskPopup_inner(_,__=None):
             start = time.time()-pastshown
             end = time.time()
@@ -166,7 +166,7 @@ class MainScreen(BoxLayout):
                 score = getScore(tid, start, end)
                 scoreColor = (1,1-score,1-score,1)
                 #print getTaskName(tid), score
-                btn = Button(text=getTaskName(tid), bold=score>=0.99, color = scoreColor, background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+                btn = Button(text=getTaskName(tid), bold=score>=0.99, color = scoreColor, background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
                 if not isComplete(tid) and not isRunning(tid) and score > 0:
                     if firstTask is None: firstTask = tid
                     tasksDropdown.add_widget(btn) 
@@ -174,8 +174,8 @@ class MainScreen(BoxLayout):
                 else:
                     btn.bind(on_release=lambda btn: moreTaskDropdown.select(btn.text))
                     moreTaskDropdown.add_widget(btn)                
-            moreTasksButton = Button(text='...', font_size='40sp', bold=True, background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
-            writeTaskButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), background_color = (0,0,0,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            moreTasksButton = Button(text='...', font_size='40sp', bold=True, background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            writeTaskButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             tasksDropdown.add_widget(moreTasksButton)
             moreTaskDropdown.add_widget(writeTaskButton)
             taskSelector = Button(text=getTaskName(firstTask), text_size=(200, 100), valign = 'middle', halign='center')
@@ -190,13 +190,14 @@ class MainScreen(BoxLayout):
             writeTaskButton.bind(on_release=writeTaskPopup.open)
             writeTaskPopup.bind(on_dismiss=lambda _: setattr(taskSelector, 'text', writeTaskInput.text))
             popupLayout.add_widget(taskSelector)
-            writeDurationButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            writeDurationButton = Button(text='+', font_size='40sp', bold=True, background_color = (0.6,0.6,0.6,1), color=(0.2,0.7,1,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             self.durationSelector = Button(text_size=(200, 100), valign = 'middle', halign='center')
             self.makeDurationDropdown(firstTask)
+            if defaultDuration is not None: self.durationSelector.text = str(defaultDuration)
             self.durationDropdown.add_widget(writeDurationButton)
             self.durationSelector.bind(on_release=self.durationDropdown.open)
             self.durationDropdown.bind(on_select=lambda instance, x: setattr(self.durationSelector, 'text', x))
-            writeDurationInput = TextInput(text=str(defaultDuration), input_filter='int')
+            writeDurationInput = TextInput(text=str(1), input_filter='int')
             writeDurationPopup = Popup(title='',
             content=writeDurationInput,
             size_hint=(None, None), size=(400, 200))
@@ -227,7 +228,7 @@ class MainScreen(BoxLayout):
         firstDuration = None
         for d in durations[:10]:
             if firstDuration is None: firstDuration = d
-            btn = Button(text=d, text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            btn = Button(text=d, text_size=(200, 100), background_color = (0.6,0.6,0.6,1), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             btn.bind(on_release=lambda btn: self.durationDropdown.select(btn.text))
             self.durationDropdown.add_widget(btn)
         if firstDuration is None: firstDuration = str(1)
@@ -273,7 +274,7 @@ class MainScreen(BoxLayout):
             writeCompletionTimeInput = TextInput(text=str(defaultCompletionExpiration/60/60), input_filter='int')
             completionTimeDropdown = DropDown()
             completionTimeSelector = Button(text_size=(200, 100), valign = 'middle', halign='center')
-            writecompletionTimeButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            writecompletionTimeButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             cur.execute("SELECT value FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC", [tid])
             res = cur.fetchall()
             values= [str(int(x[0]/60/60)) for x in res]
@@ -282,7 +283,7 @@ class MainScreen(BoxLayout):
             firstValue = None
             for v in values[:10]:
                 if firstValue is None: firstValue = v
-                btn = Button(text=v, text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+                btn = Button(text=v, background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
                 btn.bind(on_release=lambda btn: completionTimeDropdown.select(btn.text))
                 completionTimeDropdown.add_widget(btn)
             if firstValue is None: firstValue = str(defaultCompletionExpiration/60/60)
