@@ -32,12 +32,12 @@ with con:
     lastDate = ""
     logFile = open(logFileName, 'w')
     i = 0
-    for row in rows:
-        theDate = datetime.datetime.fromtimestamp(row[1]).strftime('%Y-%m-%d')
+    for startTime, endTime, value, taskID in rows:
+        theDate = datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d')
         if not theDate == lastDate:
             logFile.write((theDate+'\n').encode('utf-8'))
             lastDate = theDate
-        line = '\t' + datetime.datetime.fromtimestamp(row[1]).strftime("%H:%M") + '\t' + valueSymbols(row[2]) + " " + tasks[row[3]] #+ str(row[3])
+        line = '\t' + datetime.datetime.fromtimestamp(endTime).strftime("%H:%M") + '\t' + tasks[taskID] + " " + str(int((endTime-startTime)/60)) + "(" + valueSymbols(value) + ")" 
         #print line
         logFile.write((line+'\n').encode('utf-8'))
         i += 1000
