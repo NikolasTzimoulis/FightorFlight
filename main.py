@@ -328,7 +328,7 @@ class MainScreen(BoxLayout):
             elif success == -1:
                 cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])  
                 playAudio(soundFiles[2])
-                Clock.schedule_once(self.addNewTaskPopup(task_id, int((timeEnd-timeStart)/60)),1)
+                Clock.schedule_once(self.addNewTaskPopup(task_id, int((timeEnd-timeStart)/60)),0)
             con.commit()
             Clock.schedule_once(lambda td:self.__init__())
         return resolveFight_inner       

@@ -11,3 +11,4 @@ log.txt
 squared_exponential.asv
 .kivy*
 .sync*
+client_secret.json
