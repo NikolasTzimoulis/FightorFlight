@@ -382,10 +382,8 @@ class MainScreen(BoxLayout):
         return incrementScoreProgress_inner   
 
 class FoFApp(App):
-
     def build(self):
         return MainScreen()
-
 
 # load audio
 soundFiles = []

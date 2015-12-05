@@ -3,6 +3,7 @@ import os
 import time
 import sqlite3 as lite
 import ConfigParser
+import pickle
 
 from apiclient import discovery
 import oauth2client
@@ -27,12 +28,11 @@ except:
     
 SCOPES = 'https://www.googleapis.com/auth/calendar'
 CLIENT_SECRET_FILE = 'client_secret.json'
-APPLICATION_NAME = 'Google Calendar API Quickstart'
+APPLICATION_NAME = 'Fight or Flight Reminders'
 CALENDAR_ID = 'au6l05oqdrbi2g123obq0rqtos@group.calendar.google.com'
 TASK_DB = 'fof.db'
-DEFAULT_SLEEP_TIME = 60*60
-PAD_TIME = 60
-ACCEPTABLE_DELAY = 0 #24 * 60 * 60
+SLEEP_TIME = 60
+EVENT_DURATION = 15*60
 
 
 
@@ -94,7 +94,7 @@ def addEvent(title, eventtime):
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('calendar', 'v3', http=http)
     starttimetext = eventtime.isoformat() + 'Z'
-    endtimetext = (eventtime+datetime.timedelta(seconds=DEFAULT_SLEEP_TIME-PAD_TIME)).isoformat() + 'Z'
+    endtimetext = (eventtime+datetime.timedelta(seconds=EVENT_DURATION)).isoformat() + 'Z'
     event = createEvent(title, starttimetext, endtimetext)
     #print service.calendarList().list(pageToken=None).execute()
     event = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
@@ -130,41 +130,42 @@ def getRunningTasks():
 def getSleepTime():
     cur.execute("SELECT endTime FROM Fights WHERE value = 0 AND endTime > ? ORDER BY endTime DESC LIMIT 1", [time.time()])
     rows = cur.fetchall()
-    if rows and rows[0][0] > time.time()+DEFAULT_SLEEP_TIME:
+    if rows and rows[0][0] > time.time()+SLEEP_TIME:
         return rows[0][0]-time.time()
     else:
-        return DEFAULT_SLEEP_TIME
+        return SLEEP_TIME
 
 def getTaskName(tid):
     cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
     return cur.fetchall()[0][0]
     
 def getTasks():
-    cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime >= ?", [time.time() -  PAST_WINDOW])
+    cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime+value >= ?", [time.time() -  PAST_WINDOW])
     tasks = [x[0] for x in cur.fetchall()]
-    tasks = filter(lambda t: time.time()-getCompletionExpirationDate(t)>ACCEPTABLE_DELAY, tasks)
     return tasks
 
-shown = set()
-print datetime.datetime.now().strftime('%H:%M'),
+try:
+    oldScoresTable = pickle.load(open("scores.pickle", "rb"))
+except:
+    oldScoresTable = {}
 while True:
     con = lite.connect(TASK_DB)
     cur = con.cursor()               
     tasks = set(getTasks())
-    if tasks-shown:
-        tasks -= shown
-    else:
-        shown = set()
-    if tasks and not getRunningTasks():
-        focus = max(tasks, key=lambda t: getScore(t, time.time() -  PAST_WINDOW, time.time()))
-        shown.add(focus)
-        remindertime = datetime.datetime.utcnow()
-        addEvent(getTaskName(focus), remindertime)
-        print getTaskName(focus)
-    else:
-        print
-        shown = set()
-    sleepTime = getSleepTime()
-    print (datetime.datetime.now()+datetime.timedelta(seconds=sleepTime)).strftime('%H:%M'),
+    found = False
+    for t in tasks:
+        newScore = int(round(100*getScore(t, time.time() -  PAST_WINDOW, time.time())))
+        if t in oldScoresTable:
+            oldScore = oldScoresTable[t]
+            if not newScore == oldScore:
+                if not found:
+                    print datetime.datetime.now().strftime('%H:%M')
+                    found = True
+                print '', getTaskName(t), str(newScore)+'%', ('(+' if newScore>oldScore else '(')+str(newScore-oldScore)+')'
+                if (newScore > oldScore and newScore/10 > oldScore/10) or (newScore < oldScore and (newScore-1)/10<(oldScore-1)/10):
+                    remindertime = datetime.datetime.utcnow()
+                    addEvent(getTaskName(t)+' '+str(newScore)+'%', remindertime)                    
+        oldScoresTable[t] = newScore
+        pickle.dump(oldScoresTable, open( "scores.pickle", "wb" ) )
     con.close()
-    time.sleep(sleepTime)
+    time.sleep(SLEEP_TIME)
