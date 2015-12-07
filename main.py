@@ -11,10 +11,12 @@ from kivy.clock import Clock
 import sqlite3 as lite
 import time
 import ConfigParser
+import datetime
 
 taskDB = "fof.db"
 soundPlaylist = "sounds.m3u"
 configFileName = "config.ini"
+languagefile = "localisation.ini"
 config = ConfigParser.ConfigParser()
 try:
     config.read(configFileName)
@@ -22,12 +24,17 @@ try:
     proposalWaitTime = config.getint(config.sections()[0], "proposalwaittime") * 1000 * 60
     quickInfoWaitTime = config.getint(config.sections()[0], "quickinfowaittime") * 1000
     defaultCompletionExpiration = config.getint(config.sections()[0], "defaultcompletionexpiration") * 60 * 60
+    language = config.get(config.sections()[0], "language")
 except:
     print "Could not load config file. Reverting to default values."
     pastshown = 30 * 24 * 60 * 60
     proposalWaitTime = 60 * 60 * 1000
     quickInfoWaitTime = 5 * 1000
     defaultCompletionExpiration = 12 * 60 * 60
+    language = "English"
+    
+localisation = ConfigParser.ConfigParser()
+localisation.read(languagefile)
     
     
 def getTaskName(tid):
@@ -89,6 +96,43 @@ def getScore(tid, start, end, plusone = False): # do NOT a default values for st
 def getScoreText(score, plusone=False):
     return str((10 if plusone else 0) + 10*int(10*score))+"%"
 
+def durationToText(seconds, strict=False):
+    negative = False
+    if seconds < 0:
+        negative = True
+        seconds = -seconds
+    days, remainder = divmod(seconds, 24*60*60)
+    hours, remainder = divmod(remainder, 60*60)
+    minutes, seconds = divmod(remainder, 60)
+    timeString = '-' if negative else ''
+    timeString += str(int(days))+':' if (strict or days > 0) else ''
+    timeString += ('0' if strict or (days > 0 and hours < 10) else '') + str(int(hours))+':' if (strict or days > 0 or hours > 0) else ''
+    timeString += ('0' if (strict or ((hours > 0 or days > 0) and minutes < 10)) else '') + str(int(minutes))
+    return timeString
+
+def durationToInt(text):
+    negative = False
+    if text.startswith("-"):
+        negative = True
+        text = text[1:]
+    timeList = text.split(':')
+    seconds = None
+    try: seconds = float(timeList[-1]) * 60 
+    except: return None
+    if len(timeList) > 1:
+        try: seconds += float(timeList[-2]) * 60 *60
+        except: return None
+    if len(timeList) > 2:
+        try: seconds += float(timeList[-3]) * 24 * 60 *60
+        except: return None
+    return seconds * (-1 if negative else 1) 
+
+def getDateString(timestamp):
+    try:
+        return datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d, %H:%M')
+    except:
+        return u'???'
+
 def playAudio(filename):
     sound = SoundLoader.load(filename)
     if sound: sound.play()
@@ -96,6 +140,7 @@ def playAudio(filename):
 class MainScreen(BoxLayout):
     
     nextReload = None
+    cooldownDict = {}
 
     def __init__(self, **kwargs):
         super(MainScreen, self).__init__(**kwargs)
@@ -111,31 +156,24 @@ class MainScreen(BoxLayout):
             taskLayout = BoxLayout(orientation='horizontal')
             self.add_widget(taskLayout)
             timeLeft = deadline - time.time()
-            if timeLeft > 0:
-                taskLabel = Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center')
-                taskLayout.add_widget(taskLabel)
-                taskProgress = ProgressBar(max=deadline-timestamp)
-                self.progressbars.append(taskProgress)
-                taskLayout.add_widget(taskProgress)
-                taskProgress.value = (min(time.time()-timestamp, deadline-timestamp+1))
-                #taskLayout.bind(on_touch_up=self.addNewTaskPopup(tid, int((deadline-timestamp)/60)))
-                if timeLeft > 0: 
-                    timeLeftList.append(timeLeft)
+            taskLabel = Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center')
+            taskLayout.add_widget(taskLabel)
+            taskProgress = ProgressBar(max=deadline-timestamp)
+            self.progressbars.append(taskProgress)
+            taskLayout.add_widget(taskProgress)
+            taskProgress.value = (min(time.time()-timestamp, deadline-timestamp+1))
+            if timeLeft > 0: 
+                timeLeftList.append(timeLeft)
             else:
-                if timeLeft > -1: playAudio(soundFiles[1])    
-                taskLabel = Label(text=getTaskName(tid), text_size=(200, 100), valign = 'middle', halign='center')
-                taskLayout.add_widget(taskLabel)
-                fightButton = Button(background_color=(1,0,0,1))
-                fightButton.bind(on_press=self.getCompletionTime(tid, timestamp, deadline))
-                taskLayout.add_widget(fightButton)
-                flightButton = Button(background_color=(0.6,0.6,0.6,1))
-                flightButton.bind(on_press=self.resolveFight(tid, timestamp, deadline, -1))
-                taskLayout.add_widget(flightButton)
+                if timeLeft > -1: playAudio(soundFiles[1]) 
+                #taskLabel.bind(on_touch_up=self.taskPopup(tid,  timestamp, deadline))
+                taskProgress.bind(on_touch_up=self.taskPopup(tid,  timestamp, deadline))
+                Clock.schedule_once(self.taskPopup(tid,  timestamp, deadline), 1)   
                 enableNewTask = False
                 break
         if enableNewTask:
-            newTaskButton = Button(text='+', font_size='100sp', background_color=(0.2,0.7,1,1))
-            newTaskButton.bind(on_press=self.addNewTaskPopup())
+            newTaskButton = Button(text=localisation.get(language, "newtask"), font_size='30sp', background_color=(0.2,0.7,1,1))
+            newTaskButton.bind(on_press=self.taskPopup())
             self.add_widget(newTaskButton)
                         
         Clock.unschedule(self.incrementProgressBars)
@@ -149,24 +187,26 @@ class MainScreen(BoxLayout):
         for pb in self.progressbars:
             pb.value+=1
             
-    def addNewTaskPopup(self, defaultTask = None, defaultDuration = None):
-        def addNewTaskPopup_inner(_,__=None):
+    def taskPopup(self, finished_tid = None, finished_timestamp = None, finished_deadline = None):
+        def taskPopup_inner(_,__=None):
             start = time.time()-pastshown
             end = time.time()
-            popupLayout = BoxLayout(orientation='horizontal')
+            Clock.unschedule(self.taskPopup)
+            popupLayout = BoxLayout(orientation='vertical')
+            popup = Popup(title=localisation.get(language,"newtask") if finished_tid is None else localisation.get(language,"confirm"),
+            content=popupLayout,
+            size_hint=(None, None), size=(800, 800))
+            # task selection menu
             tasksDropdown = DropDown()
             moreTaskDropdown =  DropDown()
-            popup = Popup(title='',
-            content=popupLayout,
-            size_hint=(None, None), size=(800, 200))
             cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0")
             tasks = [x[0] for x in cur.fetchall()]
-            firstTask = defaultTask
+            firstTask = finished_tid
             for tid in sorted(tasks, key=lambda x:getScore(x, start, end), reverse=True):
                 score = getScore(tid, start, end)
                 scoreColor = (1,1-score,1-score,1)
                 #print getTaskName(tid), score
-                btn = Button(text=getTaskName(tid), bold=score>=0.99, color = scoreColor, background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+                btn = Button(text=getTaskName(tid), bold=score>=0.99, color = scoreColor, background_color = (0.6,0.6,0.6,1), text_size=(400, 100), valign = 'middle', halign='center', size_hint_y=None, width = 400, height=100)                
                 if not isComplete(tid) and not isRunning(tid) and score > 0:
                     if firstTask is None: firstTask = tid
                     tasksDropdown.add_widget(btn) 
@@ -174,43 +214,82 @@ class MainScreen(BoxLayout):
                 else:
                     btn.bind(on_release=lambda btn: moreTaskDropdown.select(btn.text))
                     moreTaskDropdown.add_widget(btn)                
-            moreTasksButton = Button(text='...', font_size='40sp', bold=True, background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
-            writeTaskButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            moreTasksButton = Button(text=localisation.get(language, "showmore"), bold=True, background_color = (0.6,0.6,0.6,1), text_size=(400, 100), valign = 'middle', halign='center', size_hint_y=None, width = 400, height=100)
+            writeTaskButton = Button(text=localisation.get(language, "createnew"), bold=True, color=(0.2,0.7,1,1), background_color = (0.6,0.6,0.6,1), text_size=(400, 100), valign = 'middle', halign='center', size_hint_y=None, width = 400, height=100)
             tasksDropdown.add_widget(moreTasksButton)
             moreTaskDropdown.add_widget(writeTaskButton)
             taskSelector = Button(text=getTaskName(firstTask), text_size=(200, 100), valign = 'middle', halign='center')
-            taskSelector.bind(on_release=tasksDropdown.open)
+            if finished_tid is None: taskSelector.bind(on_release=tasksDropdown.open)
             tasksDropdown.bind(on_select=lambda instance, x: setattr(taskSelector, 'text', x))
             moreTaskDropdown.bind(on_select=lambda instance, x: setattr(taskSelector, 'text', x))
             moreTasksButton.bind(on_release=self.showMoreTasks(moreTaskDropdown, tasksDropdown, taskSelector))
             writeTaskInput = TextInput(text='')
-            writeTaskPopup = Popup(title='',
+            writeTaskPopup = Popup(title=localisation.get(language, "createnew"),
             content=writeTaskInput,
             size_hint=(None, None), size=(400, 200))
             writeTaskButton.bind(on_release=writeTaskPopup.open)
             writeTaskPopup.bind(on_dismiss=lambda _: setattr(taskSelector, 'text', writeTaskInput.text))
+            writeTaskPopup.bind(on_dismiss=moreTaskDropdown.dismiss)
             popupLayout.add_widget(taskSelector)
-            writeDurationButton = Button(text='+', font_size='40sp', bold=True, background_color = (0.6,0.6,0.6,1), color=(0.2,0.7,1,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            # duration menu
+            self.endLabel = Label(text_size=(400, 50), font_size='12sp', valign = 'bottom', halign='left')
+            popupLayout.add_widget(self.endLabel)
+            self.writeDurationButton = Button(text=localisation.get(language, "createnew"), bold=True, background_color = (0.6,0.6,0.6,1), color=(0.2,0.7,1,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             self.durationSelector = Button(text_size=(200, 100), valign = 'middle', halign='center')
-            self.makeDurationDropdown(firstTask)
-            if defaultDuration is not None: self.durationSelector.text = str(defaultDuration)
-            self.durationDropdown.add_widget(writeDurationButton)
+            self.makeDurationDropdown(firstTask, finished_timestamp)
+            self.durationDropdown.add_widget(self.writeDurationButton)
+            if finished_tid is not None: 
+                self.durationSelector.text = durationToText(finished_deadline-finished_timestamp)
+                self.endLabel.text = localisation.get(language, "end") + " " + getDateString(finished_deadline)
             self.durationSelector.bind(on_release=self.durationDropdown.open)
             self.durationDropdown.bind(on_select=lambda instance, x: setattr(self.durationSelector, 'text', x))
-            writeDurationInput = TextInput(text=str(1), input_filter='int')
-            writeDurationPopup = Popup(title='',
+            writeDurationInput = TextInput(text=durationToText(60,True))
+            self.writeDurationPopup = Popup(title=localisation.get(language, "createnew"),
             content=writeDurationInput,
             size_hint=(None, None), size=(400, 200))
-            writeDurationButton.bind(on_release=writeDurationPopup.open)
-            writeDurationPopup.bind(on_dismiss=lambda _: setattr(self.durationSelector, 'text', writeDurationInput.text))
+            self.writeDurationButton.bind(on_release=self.writeDurationPopup.open)
+            self.writeDurationPopup.bind(on_dismiss=lambda _: setattr(self.durationSelector, 'text', writeDurationInput.text))
+            self.writeDurationPopup.bind(on_dismiss=self.durationDropdown.dismiss)
             popupLayout.add_widget(self.durationSelector)
-            tasksDropdown.bind(on_select=lambda instance, changedTaskName:self.remakeDurationDropdown(changedTaskName, writeDurationButton))
-            moreTaskDropdown.bind(on_select=lambda instance, changedTaskName:self.remakeDurationDropdown(changedTaskName, writeDurationButton))
-            addButton = Button(text='+', font_size='70sp', background_color=(0.2,0.7,1,1))
-            popupLayout.add_widget(addButton)
-            addButton.bind(on_press=self.addNewTask(taskSelector, self.durationSelector, popup))
+            # completion time menu
+            self.cooldownLabel = Label(text_size=(400, 50), font_size='12sp', valign = 'bottom', halign='left')
+            popupLayout.add_widget(self.cooldownLabel)
+            self.writecompletionTimeButton = Button(text=localisation.get(language, "createnew"), bold=True, color=(0.2,0.7,1,1), background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            self.completionTimeSelector = Button(text_size=(200, 100), valign = 'middle', halign='center')
+            self.makeCompletionTimeDropdown(firstTask, finished_timestamp)
+            self.completionTimeDropdown.add_widget(self.writecompletionTimeButton)
+            if finished_tid is not None and finished_tid in MainScreen.cooldownDict: 
+                self.completionTimeSelector.text = durationToText(MainScreen.cooldownDict[finished_tid])
+                self.cooldownLabel.text = localisation.get(language, "cooldown") + " " + getDateString(finished_deadline+MainScreen.cooldownDict[finished_tid])
+            self.completionTimeSelector.bind(on_release=self.completionTimeDropdown.open)
+            self.completionTimeDropdown.bind(on_select=lambda instance, x: setattr(self.completionTimeSelector, 'text', x))
+            writeCompletionTimeInput = TextInput(text=durationToText(defaultCompletionExpiration))                         
+            self.writeCompletionTimePopup = Popup(title=localisation.get(language, "createnew"),
+            content=writeCompletionTimeInput,
+            size_hint=(None, None), size=(400, 200))
+            self.writecompletionTimeButton.bind(on_release=self.writeCompletionTimePopup.open)
+            self.writeCompletionTimePopup.bind(on_dismiss=lambda _: setattr(self.completionTimeSelector, 'text', writeCompletionTimeInput.text))
+            self.writeCompletionTimePopup.bind(on_dismiss=self.completionTimeDropdown.dismiss)
+            popupLayout.add_widget(self.completionTimeSelector) 
+            # button
+            self.fightButton = None
+            if finished_tid is None:
+                addButton = Button(text=localisation.get(language, "go"), background_color=(0.2,0.7,1,1))                
+                popupLayout.add_widget(addButton)
+                addButton.bind(on_press=self.addNewTask(taskSelector, self.durationSelector, self.completionTimeSelector, popup))
+            else:
+                self.fightButton = Button(text=localisation.get(language, "confirm"), background_color=(1,0,0,1))
+                popupLayout.add_widget(self.fightButton)
+                self.fightButton.bind(on_press=self.resolveFight(finished_tid, finished_timestamp, finished_deadline, 1, self.durationSelector, self.completionTimeSelector, popup))
+            # wrap it up          
+            tasksDropdown.bind(on_select=lambda instance, changedTaskName:self.refreshTaskPopup(tname=changedTaskName, timestamp=finished_timestamp))
+            moreTaskDropdown.bind(on_select=lambda instance, changedTaskName:self.refreshTaskPopup(tname=changedTaskName, timestamp=finished_timestamp))
+            self.durationDropdown.bind(on_select=lambda instance, changedDuration:self.refreshTaskPopup(duration=changedDuration, timestamp=finished_timestamp))
+            self.completionTimeDropdown.bind(on_select=lambda instance, changedCooldown:self.refreshTaskPopup(cooldown=changedCooldown, timestamp=finished_timestamp))
+            self.writeDurationPopup.bind(on_dismiss=lambda _: self.refreshTaskPopup(duration=writeDurationInput.text, timestamp=finished_timestamp))
+            self.writeCompletionTimePopup.bind(on_dismiss=lambda _: self.refreshTaskPopup(cooldown=writeCompletionTimeInput.text, timestamp=finished_timestamp))
             popup.open()  
-        return addNewTaskPopup_inner
+        return taskPopup_inner
     
     def showMoreTasks(self, newDropdown, oldDropdown, parent):
         def showshowMoreTasks_inner(_=None):
@@ -218,10 +297,11 @@ class MainScreen(BoxLayout):
             oldDropdown.dismiss()
         return showshowMoreTasks_inner
     
-    def makeDurationDropdown(self, tid):
+    def makeDurationDropdown(self, tid, timestamp):
+        if timestamp is None: timestamp = time.time()
         cur.execute("SELECT endTime, startTime FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC", [tid])
         res = cur.fetchall()
-        durations = [str(int((x[0]-x[1])/60)) for x in res]
+        durations = [durationToText(x[0]-x[1]) for x in res]
         seen = set()
         durations = [ x for x in durations if not (x in seen or seen.add(x))]
         self.durationDropdown = DropDown()
@@ -231,22 +311,62 @@ class MainScreen(BoxLayout):
             btn = Button(text=d, text_size=(200, 100), background_color = (0.6,0.6,0.6,1), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
             btn.bind(on_release=lambda btn: self.durationDropdown.select(btn.text))
             self.durationDropdown.add_widget(btn)
-        if firstDuration is None: firstDuration = str(1)
+        if firstDuration is None: firstDuration = durationToText(1)
         self.durationSelector.text = firstDuration
-    
-    def remakeDurationDropdown(self, tname, writeDurationButton):
-        try:
-            tid = getTaskId(tname)
-        except:
-            tid = None
-        self.durationDropdown.clear_widgets()
-        self.makeDurationDropdown(tid)
-        self.durationDropdown.add_widget(writeDurationButton)
-        self.durationDropdown.bind(on_select=lambda instance, x: setattr(self.durationSelector, 'text', x))
-        self.durationSelector.bind(on_release=self.durationDropdown.open)
-            
+        self.endLabel.text = localisation.get(language, "end") + " " + getDateString(timestamp+ durationToInt(firstDuration) )
         
-    def addNewTask(self, taskSelector, durationSelector, popup=None):
+    def makeCompletionTimeDropdown(self, tid, timestamp):
+        if timestamp is None: timestamp = time.time()
+        cur.execute("SELECT value FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC", [tid])
+        res = cur.fetchall()
+        values= [durationToText(x[0]) for x in res]
+        seen = set()
+        values = [ x for x in values if not (x in seen or seen.add(x))]
+        self.completionTimeDropdown =  DropDown()
+        firstValue = None
+        for v in values[:10]:
+            if firstValue is None: firstValue = v
+            btn = Button(text=v, background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
+            btn.bind(on_release=lambda btn: self.completionTimeDropdown.select(btn.text))
+            self.completionTimeDropdown.add_widget(btn)
+        if firstValue is None: firstValue = durationToText(defaultCompletionExpiration)
+        self.completionTimeSelector.text = firstValue
+        self.cooldownLabel.text = localisation.get(language, "cooldown") + " " + getDateString( timestamp+durationToInt(self.durationSelector.text)+durationToInt(firstValue) )
+    
+    def refreshTaskPopup(self, tname=None, duration=None, cooldown=None, timestamp=None):
+        if timestamp is None: timestamp = time.time()
+        if tname is not None:
+            try:
+                tid = getTaskId(tname)
+            except:
+                tid = None
+            self.durationDropdown.clear_widgets()
+            self.makeDurationDropdown(tid, timestamp)
+            self.durationDropdown.add_widget(self.writeDurationButton)
+            self.durationDropdown.bind(on_select=lambda instance, x: setattr(self.durationSelector, 'text', x))
+            self.durationSelector.bind(on_release=self.durationDropdown.open)       
+            self.completionTimeDropdown.clear_widgets()
+            self.makeCompletionTimeDropdown(tid, timestamp)
+            self.completionTimeDropdown.add_widget(self.writecompletionTimeButton)
+            self.completionTimeDropdown.bind(on_select=lambda instance, x: setattr(self.completionTimeSelector, 'text', x))
+            self.completionTimeSelector.bind(on_release=self.completionTimeDropdown.open)
+            self.durationDropdown.bind(on_select=lambda instance, changedDuration:self.refreshTaskPopup(duration=changedDuration, timestamp=timestamp))
+            self.completionTimeDropdown.bind(on_select=lambda instance, changedCooldown:self.refreshTaskPopup(cooldown=changedCooldown, timestamp=timestamp))
+            self.writeDurationPopup.bind(on_dismiss=self.durationDropdown.dismiss)
+            self.writeCompletionTimePopup.bind(on_dismiss=self.completionTimeDropdown.dismiss)
+        if duration is not None:
+            self.endLabel.text = localisation.get(language, "end") + " " + getDateString( timestamp + durationToInt(duration) )
+            self.cooldownLabel.text = localisation.get(language, "cooldown") + " " + getDateString( timestamp + durationToInt(duration) + durationToInt(self.completionTimeSelector.text))
+            if timestamp + durationToInt(duration) > time.time() and self.fightButton is not None:
+                self.endLabel.color = (1,1,0,1)
+                self.endLabel.text += " !"
+            elif self.fightButton is not None:
+                self.endLabel.color = (1,1,1,1)                
+        if cooldown is not None:
+            self.cooldownLabel.text = localisation.get(language, "cooldown") + " " + getDateString( timestamp + durationToInt(self.durationSelector.text) + durationToInt(cooldown))
+             
+        
+    def addNewTask(self, taskSelector, durationSelector, cooldownSelector=None, popup=None):
         def addNewTask_inner(_=None):
             if not taskSelector.text == '' and not durationSelector.text == '':
                 if popup is not None: 
@@ -260,77 +380,44 @@ class MainScreen(BoxLayout):
                         cur.execute("INSERT INTO Tasks(name) VALUES(?)", [taskSelector.text.strip().decode('utf-8')])
                     con.commit()
                     tid = getTaskId(taskSelector.text)
-                duration = 60*int(durationSelector.text)
+                duration = durationToInt(durationSelector.text) 
                 cur.execute("UPDATE Fights SET value=-1 WHERE taskId=? AND value = 0 AND startTime <= ?;", [tid, time.time()])
                 unComplete(tid)
                 cur.execute("INSERT INTO Fights VALUES(?, ?, ?, ?)", [time.time(), time.time()+duration, 0, tid])
                 con.commit() 
+                MainScreen.cooldownDict[tid] = durationToInt(cooldownSelector.text)
                 Clock.schedule_once(lambda td:self.__init__())
         return addNewTask_inner
-    
-    def getCompletionTime(self, tid, timestamp, deadline, timeEnd=time.time()):
-        def getCompletionTime_inner(_=None):
-            popupLayout = BoxLayout(orientation='horizontal')
-            writeCompletionTimeInput = TextInput(text=str(defaultCompletionExpiration/60/60), input_filter='int')
-            completionTimeDropdown = DropDown()
-            completionTimeSelector = Button(text_size=(200, 100), valign = 'middle', halign='center')
-            writecompletionTimeButton = Button(text='+', font_size='40sp', bold=True, color=(0.2,0.7,1,1), background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
-            cur.execute("SELECT value FROM Fights WHERE taskID = ? AND value > 0 ORDER BY endTime DESC", [tid])
-            res = cur.fetchall()
-            values= [str(int(x[0]/60/60)) for x in res]
-            seen = set()
-            values = [ x for x in values if not (x in seen or seen.add(x))]
-            firstValue = None
-            for v in values[:10]:
-                if firstValue is None: firstValue = v
-                btn = Button(text=v, background_color = (0.6,0.6,0.6,1), text_size=(200, 100), valign = 'middle', halign='center', size_hint_y=None, width = 200, height=100)
-                btn.bind(on_release=lambda btn: completionTimeDropdown.select(btn.text))
-                completionTimeDropdown.add_widget(btn)
-            if firstValue is None: firstValue = str(defaultCompletionExpiration/60/60)
-            completionTimeDropdown.add_widget(writecompletionTimeButton)
-            completionTimeSelector.text = firstValue
-            completionTimeDropdown.bind(on_select=lambda instance, x: setattr(completionTimeSelector, 'text', x))
-            completionTimeSelector.bind(on_release=completionTimeDropdown.open)
-            writeCompletionTimePopup = Popup(title='',
-            content=writeCompletionTimeInput,
-            size_hint=(None, None), size=(400, 200))
-            writecompletionTimeButton.bind(on_release=writeCompletionTimePopup.open)
-            writeCompletionTimePopup.bind(on_dismiss=lambda _: setattr(completionTimeSelector, 'text', writeCompletionTimeInput.text))            
-            popupLayout.add_widget(completionTimeSelector)
-            fightButton = Button(background_color=(1,0,0,1))
-            popupLayout.add_widget(fightButton)
-            popup = Popup(title='',
-            content=popupLayout,
-            size_hint=(None, None), size=(400, 200))
-            fightButton.bind(on_press=self.resolveFight(tid, timestamp, deadline, 1, completionTimeSelector, popup))
-            popup.open()  
-        return getCompletionTime_inner
-            
-    def resolveFight(self, task_id, timeStart, timeEnd, success, completionTimeSelector=None, popup=None):
+               
+    def resolveFight(self, task_id, timeStart, timeEnd, success, durationSelector=None, completionTimeSelector=None, popup=None):
         def resolveFight_inner(_=None):
             global waitingForResolution
-            if popup is not None: popup.dismiss()
-            oldScore = getScore(task_id, time.time()-pastshown, time.time())
-            if success >= 0:
-                if success == 0: 
-                    completionTime = 1
-                    deadline = time.time()
-                    cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [deadline, task_id, timeStart, timeEnd])
-                else:
-                    deadline = timeEnd
-                try:
-                    completionTime = 60*60*int(completionTimeSelector.text)+1
-                except:
-                    completionTime = 1
-                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
+            changedDeadline = timeStart + durationToInt(durationSelector.text)
+            if changedDeadline <= time.time():
+                if popup is not None: popup.dismiss()
+                oldScore = getScore(task_id, time.time()-pastshown, time.time())
+                if success >= 0:
+                    if success == 0: 
+                        completionTime = 1
+                        deadline = time.time()
+                        cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [deadline, task_id, timeStart, timeEnd])
+                    else:
+                        deadline = timeEnd
+                    try:
+                        completionTime = durationToInt(completionTimeSelector.text)+1
+                    except:
+                        completionTime = 1
+                    cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [completionTime, task_id, timeStart, deadline])
+                    if abs(changedDeadline-deadline) > 1:
+                        cur.execute("UPDATE Fights SET endTime=? WHERE taskId=? AND startTime=? AND endTime =?;", [changedDeadline, task_id, timeStart, deadline])    
+                    con.commit()
+                    self.makeScoreProgressPopup(task_id, oldScore)     
+                elif success == -1:
+                    cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])  
+                    playAudio(soundFiles[2])
+                    #Clock.schedule_once(self.taskPopup(task_id, int((timeEnd-timeStart)/60)),0)
                 con.commit()
-                self.makeScoreProgressPopup(task_id, oldScore)     
-            elif success == -1:
-                cur.execute("UPDATE Fights SET value=? WHERE taskId=? AND startTime=? AND endTime =?;", [-1, task_id, timeStart, timeEnd])  
-                playAudio(soundFiles[2])
-                Clock.schedule_once(self.addNewTaskPopup(task_id, int((timeEnd-timeStart)/60)),0)
-            con.commit()
-            Clock.schedule_once(lambda td:self.__init__())
+                Clock.schedule_once(lambda td:self.__init__())
         return resolveFight_inner       
     
     def makeScoreProgressPopup(self, tid, oldScore):
@@ -350,11 +437,11 @@ class MainScreen(BoxLayout):
             nextScoreMilestone.bold = nextScoreMilestone.text == '100%'
             progressLayout.add_widget(nextScoreMilestone)
             scoreLayout.add_widget(progressLayout)            
-            scorePopup = Popup(title='',
+            scorePopup = Popup(title=localisation.get(language, "level"),
             content=scoreLayout,
             size_hint=(None, None), size=(400, 300))
             scorePopup.open()  
-            Clock.schedule_once(scorePopup.dismiss, 5)
+            Clock.schedule_once(scorePopup.dismiss, 10)
             Clock.schedule_interval(self.incrementScoreProgress(scoreProgress, prevScoreMilestone, nextScoreMilestone, oldScore, newScore), 0.1)
             
     def incrementScoreProgress(self, scoreProgress, prevScoreMilestone, nextScoreMilestone, oldScore, newScore):              
