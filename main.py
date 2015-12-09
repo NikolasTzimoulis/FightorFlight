@@ -14,8 +14,8 @@ import ConfigParser
 import datetime
 
 __version__ = '1.0'
-#taskDB = "fof.db"
-taskDB = "/mnt/sdcard/kivy/fof/fof.db"
+taskDB = "fof.db"
+#taskDB = "/mnt/sdcard/kivy/fof/fof.db"
 soundPlaylist = "sounds.m3u"
 configFileName = "config.ini"
 languagefile = "localisation.ini"
