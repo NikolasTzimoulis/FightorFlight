@@ -42,14 +42,21 @@ def printlala():
     for startTime, endTime, value, tid in cur.fetchall():
         cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
         print cur.fetchall()[0][0], datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
+
+def findWeirdEntries():
+    cur.execute("SELECT * FROM Fights WHERE endTime > 2524608000")
+    for startTime, endTime, value, tid in cur.fetchall():
+        cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
+        print cur.fetchall()[0][0], datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
         
 def resetStress():        
     cur.execute("DELETE FROM Stress")
     
 with con:    
     cur = con.cursor()
-    printlala()
-    deleteLala()
+    #printlala()
+    #deleteLala()
+    findWeirdEntries()
    
     
     

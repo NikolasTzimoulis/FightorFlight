@@ -13,3 +13,4 @@ squared_exponential.asv
 .sync*
 client_secret.json
 *.pickle
+*.apk
