@@ -37,7 +37,7 @@ nextMainReload = None
 nextLevelUpdate = None
 focusTasks = set([])
 
-def addNewTask(_):
+def addNewPledge(_):
     global pastshown
     line = entryText.get()
     duration = getSeconds(line.split()[-1])
@@ -469,7 +469,7 @@ def reloadMain():
     e.pack()
     e.focus_set()
     if not waitingForResolution:
-        e.bind('<Return>', addNewTask) 
+        e.bind('<Return>', addNewPledge) 
         e.bind('<Down>', lambda _: proposeTask(skipChange=1))
         e.bind('<Up>', lambda _: proposeTask(skipChange=-1))
         e.bind('<Button-3>', showTasks())

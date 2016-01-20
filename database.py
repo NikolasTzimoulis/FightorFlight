@@ -49,14 +49,37 @@ def findWeirdEntries():
         cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
         print cur.fetchall()[0][0], datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
         
-def resetStress():        
-    cur.execute("DELETE FROM Stress")
+def resetTable(tableName):        
+    cur.execute("DELETE FROM "+tableName)
+    print(tableName+" deleted rows.")
+    
+def deleteTable(tableName):
+    cur.execute("DROP TABLE "+tableName)
+    print(tableName+" deleted.")
+    
+def printTasks():
+    cur.execute("SELECT id, name FROM Tasks")
+    for tid, tname in cur.fetchall():
+        print tid, tname
+
+def printMilestones(task_id):
+    cur.execute("SELECT deadline FROM Milestones WHERE taskId = ?", [task_id])
+    for milestone in cur.fetchall():
+        print datetime.datetime.fromtimestamp(milestone[0]).strftime('%Y-%m-%d, %H:%M')
+
+def printAllMilestones():
+    cur.execute("SELECT * FROM Milestones")
+    for tid, milestone in cur.fetchall():
+        print tid, datetime.datetime.fromtimestamp(milestone).strftime('%Y-%m-%d, %H:%M')
     
 with con:    
     cur = con.cursor()
     #printlala()
     #deleteLala()
-    findWeirdEntries()
+    #findWeirdEntries()
+    #printTasks()
+    printMilestones(4)
+    
    
     
     
