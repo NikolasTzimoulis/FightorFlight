@@ -71,14 +71,22 @@ def printAllMilestones():
     cur.execute("SELECT * FROM Milestones")
     for tid, milestone in cur.fetchall():
         print tid, datetime.datetime.fromtimestamp(milestone).strftime('%Y-%m-%d, %H:%M')
+
+def printSchema(table):
+    cur.execute("PRAGMA table_info("+table+");")
+    for col in cur.fetchall():
+        print col
+        
+def integrity():
+    cur.execute("pragma integrity_check")
+    for la in cur.fetchall():
+        print la
     
 with con:    
     cur = con.cursor()
-    #printlala()
-    #deleteLala()
-    #findWeirdEntries()
-    #printTasks()
-    printMilestones(4)
+    printSchema("Fights")
+    integrity()
+
     
    
     
