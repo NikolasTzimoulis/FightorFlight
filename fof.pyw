@@ -10,7 +10,7 @@ import os
 import winsound
 import datetime
 
-taskDB = "fof.db"
+taskDB = "D:\\temp\\fof_backup\\fof.db"
 soundPlaylist = "sounds.m3u"
 configFileName = "config.ini"
 config = ConfigParser.ConfigParser()

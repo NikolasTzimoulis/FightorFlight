@@ -4,13 +4,16 @@ import time
 import sqlite3 as lite
 import ConfigParser
 import pickle
+import ctypes
+import matplotlib.pyplot
+import datetime
+import random
+import pyautogui
 
 from apiclient import discovery
 import oauth2client
 from oauth2client import client
 from oauth2client import tools
-
-import datetime
 
 try:
     import argparse
@@ -24,16 +27,19 @@ try:
     PAST_WINDOW = config.getint(config.sections()[0], "pastshown") * 24 * 60 * 60
 except:
     print "Could not load config file. Reverting to default values."
-    PAST_WINDOW = 30 * 24 * 60 * 60
+    PAST_WINDOW = 1 * 24 * 60 * 60
     
 SCOPES = 'https://www.googleapis.com/auth/calendar'
 CLIENT_SECRET_FILE = 'client_secret.json'
 APPLICATION_NAME = 'Fight or Flight Reminders'
 CALENDAR_ID = 'au6l05oqdrbi2g123obq0rqtos@group.calendar.google.com'
-TASK_DB = 'fof.db'
-SLEEP_TIME = 60
+TASK_DB = 'D:\\temp\\fof_backup\\fof.db'
 EVENT_DURATION = 15*60
-
+TIME_WINDOW_SHORT = 12*60*60
+NUMBER_OF_WINDOWS = 365 * 24* 60 * 60 / TIME_WINDOW_SHORT
+DELAY_INIT_MAX = 60 
+DELAY_INIT_POWER = 5
+EVENT_REPEAT_TIMER = 30*60
 
 
 def get_credentials():
@@ -107,6 +113,19 @@ def getCompletionExpirationDate(tid, timeback=0):
     except:
         return -float("inf")
     
+def isComplete(tid, timeback=0):
+    if getCompletionExpirationDate(tid, timeback) > time.time() - timeback:
+        return True
+    else:
+        return False
+    
+def recentTasks(timeback):
+    cur.execute("SELECT taskId FROM Fights WHERE value > 0 AND endTime >= ? ORDER BY endTime DESC", [time.time()-timeback])
+    try:
+        return cur.fetchall()[0]
+    except:
+        return []
+    
 def getScore(tid, start, end):
     cur.execute("SELECT startTime, endTime, value FROM Fights WHERE taskID = ? AND value > 0 AND endTime+value >= ? AND startTime <= ?", [tid, start, end])
     rows = cur.fetchall()
@@ -127,45 +146,65 @@ def getRunningTasks():
     rows = cur.fetchall()
     return map(lambda x: x[0], rows)
 
-def getSleepTime():
-    cur.execute("SELECT endTime FROM Fights WHERE value = 0 AND endTime > ? ORDER BY endTime DESC LIMIT 1", [time.time()])
-    rows = cur.fetchall()
-    if rows and rows[0][0] > time.time()+SLEEP_TIME:
-        return rows[0][0]-time.time()
-    else:
-        return SLEEP_TIME
-
 def getTaskName(tid):
     cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
     return cur.fetchall()[0][0]
     
 def getTasks():
-    cur.execute("SELECT DISTINCT taskID FROM Fights WHERE value > 0 AND endTime+value >= ?", [time.time() -  PAST_WINDOW])
+    cur.execute("SELECT DISTINCT taskId FROM Milestones WHERE deadline >= ?", [time.time()])
     tasks = [x[0] for x in cur.fetchall()]
     return tasks
 
-try:
-    oldScoresTable = pickle.load(open("scores.pickle", "rb"))
-except:
-    oldScoresTable = {}
-while True:
-    con = lite.connect(TASK_DB)
-    cur = con.cursor()               
-    tasks = set(getTasks())
-    found = False
-    for t in tasks:
-        newScore = int(round(100*getScore(t, time.time() -  PAST_WINDOW, time.time())))
-        if t in oldScoresTable:
-            oldScore = oldScoresTable[t]
-            if not newScore == oldScore:
-                if not found:
-                    print datetime.datetime.now().strftime('%H:%M')
-                    found = True
-                print '', getTaskName(t), str(newScore)+'%', ('(+' if newScore>oldScore else '(')+str(newScore-oldScore)+')'
-                if (newScore > oldScore and newScore/10 > oldScore/10) or (newScore < oldScore and (newScore-1)/10<(oldScore-1)/10):
-                    remindertime = datetime.datetime.utcnow()
-                    addEvent(getTaskName(t)+' '+str(newScore)+'%', remindertime)                    
-        oldScoresTable[t] = newScore
-        pickle.dump(oldScoresTable, open( "scores.pickle", "wb" ) )
-    con.close()
-    time.sleep(SLEEP_TIME)
+def getAvgScore(tasks, start, end):
+    scores = map(lambda t: getScore(t, start, end), tasks)
+    return sum(scores)/len(tasks)
+
+def chart(tasks):
+    task = random.choice(list(tasks))
+    times = []
+    scores = []
+    moment = time.time()
+    while moment > time.time()-NUMBER_OF_WINDOWS*TIME_WINDOW_SHORT:
+        times.append(datetime.datetime.fromtimestamp(moment))
+        scores.append(getScore(task, moment-TIME_WINDOW_SHORT/2, moment+TIME_WINDOW_SHORT/2))
+        moment -= TIME_WINDOW_SHORT
+    scores.reverse()
+    times.reverse()
+    matplotlib.rc('font', family='Arial')
+    matplotlib.pyplot.plot(times, scores, 'ko:', label = unicode(getTaskName(task)))
+    matplotlib.pyplot.legend(loc='best')
+    matplotlib.pyplot.show()
+    
+def durationToText(seconds, strict=False):
+    negative = False
+    if seconds < 0:
+        negative = True
+        seconds = -seconds
+    days, remainder = divmod(seconds, 24*60*60)
+    hours, remainder = divmod(remainder, 60*60)
+    minutes, seconds = divmod(remainder, 60)
+    timeString = '-' if negative else ''
+    timeString += str(int(days))+':' if (strict or days > 0) else ''
+    timeString += ('0' if strict or (days > 0 and hours < 10) else '') + str(int(hours))+':' if (strict or days > 0 or hours > 0) else ''
+    timeString += ('0' if (strict or ((hours > 0 or days > 0) and minutes < 10)) else '') + str(int(minutes))
+    return unicode(str(seconds)+"''" if timeString == '0' else timeString)
+
+con = lite.connect(TASK_DB)
+cur = con.cursor()               
+tasks = set(getTasks())
+found = filter(lambda t: not isComplete(t), tasks)
+    
+avgScore = getAvgScore(tasks, time.time()-TIME_WINDOW_SHORT/2, time.time()+TIME_WINDOW_SHORT/2)
+delay = int(DELAY_INIT_MAX * avgScore**DELAY_INIT_POWER)
+if not found:
+    closestCompletionDate = min(map(getCompletionExpirationDate, tasks))
+    delay += max( int(closestCompletionDate - time.time()), EVENT_REPEAT_TIMER )
+for _ in range(len(found)): pyautogui.hotkey('alt', 'f4')
+#os.system("shutdown -s -t " + str(delay))
+if delay < DELAY_INIT_MAX:
+    found.sort(key=getCompletionExpirationDate, reverse=True)
+    ctypes.windll.user32.MessageBoxW(0, "\n".join(map(getTaskName, found)), str(int(100*avgScore))+u'%', 0)
+if random.randint(1,100) == 1:
+    chart(tasks)
+
+con.close()

@@ -19,7 +19,7 @@ import datetime
 import math
 
 __version__ = '2.0'
-taskDB = "fof.db"
+taskDB = "D:\\temp\\fof_backup\\fof.db"
 #taskDB = "/mnt/sdcard/kivy/fof/fof.db"
 soundPlaylist = "sounds.m3u"
 configFileName = "config.ini"
