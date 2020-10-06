@@ -1,3 +1,4 @@
+#! python2
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -19,7 +20,9 @@ import datetime
 import math
 
 __version__ = '2.0'
-taskDB = "D:\\temp\\fof_backup\\fof.db"
+taskDB = "fof.db"
+#taskDB = "D:\\temp\\fof_backup\\fof.db"
+#taskDB = "D:\\temp\\fof_backup\\fof.db"
 #taskDB = "/mnt/sdcard/kivy/fof/fof.db"
 soundPlaylist = "sounds.m3u"
 configFileName = "config.ini"
@@ -219,8 +222,9 @@ def commitConfig():
     configFile.close()
 
 def playAudio(filename):
-    sound = SoundLoader.load(filename)
-    if sound: sound.play()
+    #sound = SoundLoader.load(filename)
+    #if sound: sound.play()
+    pass
     
 class MainScreen(ScrollView):
     

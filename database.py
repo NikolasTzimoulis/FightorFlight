@@ -44,10 +44,10 @@ def printlala():
         print cur.fetchall()[0][0], datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
 
 def findWeirdEntries():
-    cur.execute("SELECT * FROM Fights WHERE endTime > 2524608000")
+    cur.execute("SELECT * FROM Fights WHERE endTime > 1544486400")
     for startTime, endTime, value, tid in cur.fetchall():
         cur.execute("SELECT name FROM Tasks WHERE id = ?", [tid])
-        print cur.fetchall()[0][0], datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60)
+        print cur.fetchall()[0][0], datetime.datetime.fromtimestamp(startTime).strftime('%Y-%m-%d, %H:%M'), datetime.datetime.fromtimestamp(endTime).strftime('%Y-%m-%d, %H:%M'), round(value/60/60), startTime
         
 def resetTable(tableName):        
     cur.execute("DELETE FROM "+tableName)
@@ -81,12 +81,30 @@ def integrity():
     cur.execute("pragma integrity_check")
     for la in cur.fetchall():
         print la
+        
+def timeActive(tid):
+    cur.execute("SELECT SUM(endTime-startTime) FROM Fights WHERE taskId = ?", [tid])
+    print cur.fetchall()[0][0]/60/60
+    
+def fixTime(tid, old, new):
+    cur.execute("UPDATE Fights SET startTime = ?, endTime = ? WHERE startTime = ? AND endTime = ? AND taskId = ?", [new, new, old, old, tid])
+    
+def latest(task, limit):
+    cur.execute("SELECT startTime, endTime, value FROM Fights WHERE taskId = ? ORDER BY endTime DESC LIMIT ?", [task, limit])
+    for starttime, endtime, val, in cur.fetchall():
+        print datetime.datetime.fromtimestamp(starttime).strftime('%Y-%m-%d, %H:%M'), 
+        print datetime.datetime.fromtimestamp(endtime).strftime('%Y-%m-%d, %H:%M')
+        print val, datetime.datetime.fromtimestamp(endtime+val).strftime('%Y-%m-%d, %H:%M'), "\n"
+        
+def newFight(start, end, value, task):
+    cur.execute("INSERT INTO Fights VALUES(?, ?, ?, ?)", [start, end, value, task])
     
 with con:    
     cur = con.cursor()
-    printSchema("Fights")
-    integrity()
+    #newFight(, , , 16)
 
+    printTasks()
+    
     
    
     
